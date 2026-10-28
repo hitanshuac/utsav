@@ -22,6 +22,18 @@ Deterministic Celebration & Wedding Coordination Command Center built for Family
    - Uses Kahn's topological sorting algorithm to order tasks by prerequisite completion and deadline proximity.
    - Exports RFC 5545 compliant `.ics` calendar files and 1-click Google Calendar links.
 
+## Environment Setup
+
+1. Copy the example environment template:
+   ```bash
+   cp .env.example .env
+   ```
+2. Open `.env` and insert your Gemini API key:
+   ```env
+   GEMINI_API_KEY="your-gemini-api-key"
+   ```
+   *(Note: `.env` is listed in `.gitignore` so your personal key will never be tracked or committed to Git).*
+
 ## Verification
 
 ```bash
