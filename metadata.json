@@ -1,0 +1,6 @@
+{
+  "name": "Celebration & Event Planner",
+  "description": "Deterministic Celebration & Wedding Coordination Command Center with MLSecOps Vendor Auditing, Topological Milestone Tracking, and Strategic Budget Trade-Offs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
