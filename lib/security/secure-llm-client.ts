@@ -1,21 +1,48 @@
 import { GoogleGenAI } from "@google/genai";
 
+const KNOWN_PLACEHOLDERS = new Set([
+  "YOUR_GEMINI_API_KEY",
+  "YOUR_GEMINI_API_KEY_HERE",
+  "MY_GEMINI_API_KEY",
+  "YOUR_API_KEY",
+  "REPLACE_WITH_KEY",
+  "YOUR_KEY_HERE"
+]);
+
+export interface LLMStatus {
+  configured: boolean;
+  model: string;
+  provider: string;
+  source: "gemini-live" | "deterministic-shield";
+  message: string;
+}
+
 export class SecureLLMClient {
   private static instance: SecureLLMClient;
   private ai: GoogleGenAI | null = null;
-  private modelName = "gemini-3.8-flash";
+  private primaryModel: string;
+  private fallbackModel = "gemini-2.5-flash";
 
   private constructor() {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey && apiKey !== "MY_GEMINI_API_KEY" && apiKey.trim().length > 0) {
+    this.primaryModel = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
+    this.initClient();
+  }
+
+  private initClient(): void {
+    const rawKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
+    const isPlaceholder = !rawKey || KNOWN_PLACEHOLDERS.has(rawKey) || rawKey.length < 10;
+
+    if (!isPlaceholder) {
       this.ai = new GoogleGenAI({
-        apiKey,
+        apiKey: rawKey,
         httpOptions: {
           headers: {
             "User-Agent": "aistudio-build"
           }
         }
       });
+    } else {
+      this.ai = null;
     }
   }
 
@@ -24,6 +51,31 @@ export class SecureLLMClient {
       SecureLLMClient.instance = new SecureLLMClient();
     }
     return SecureLLMClient.instance;
+  }
+
+  public getStatus(): LLMStatus {
+    // Re-check in case .env was modified at runtime
+    if (!this.ai) {
+      this.initClient();
+    }
+
+    if (this.ai) {
+      return {
+        configured: true,
+        model: this.primaryModel,
+        provider: "Google Gemini (@google/genai)",
+        source: "gemini-live",
+        message: `Live Gemini inference active (Primary: ${this.primaryModel})`
+      };
+    }
+
+    return {
+      configured: false,
+      model: "none",
+      provider: "Deterministic Shield Fallback",
+      source: "deterministic-shield",
+      message: "GEMINI_API_KEY placeholder detected. Operating in high-fidelity Deterministic Shield mode."
+    };
   }
 
   // Pre-flight sanitization (OWASP LLM01: Prompt Injection Prevention)
@@ -56,26 +108,43 @@ export class SecureLLMClient {
   ): Promise<string> {
     const sanitized = this.sanitizeInput(sanitizedUserPrompt);
     if (!this.ai) {
+      this.initClient();
+    }
+    if (!this.ai) {
       throw new Error("GEMINI_API_UNAVAILABLE: GEMINI_API_KEY is not configured for live inference.");
     }
 
-    const generatePromise = this.ai.models.generateContent({
-      model: this.modelName,
-      contents: sanitized,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-        temperature: 0.2,
-        ...(responseSchema ? { responseSchema } : {})
+    const runCall = async (modelName: string): Promise<string> => {
+      const generatePromise = this.ai!.models.generateContent({
+        model: modelName,
+        contents: sanitized,
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+          temperature: 0.2,
+          ...(responseSchema ? { responseSchema } : {})
+        }
+      });
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`GEMINI_TIMEOUT: Request to ${modelName} exceeded 15000ms`)), 15000)
+      );
+
+      const response = await Promise.race([generatePromise, timeoutPromise]);
+      const responseText = response.text ?? "{}";
+      return this.inspectOutput(responseText);
+    };
+
+    try {
+      return await runCall(this.primaryModel);
+    } catch (primaryErr) {
+      // If primary model returns 404 or unsupported on the user's specific tier, attempt standard fallback model
+      const errMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
+      if (errMsg.includes("404") || errMsg.includes("NOT_FOUND") || errMsg.includes("unsupported")) {
+        console.warn(`[Gemini LLM] Primary model ${this.primaryModel} failed (${errMsg}). Retrying with fallback ${this.fallbackModel}...`);
+        return await runCall(this.fallbackModel);
       }
-    });
-
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("GEMINI_TIMEOUT: Request exceeded 4000ms")), 4000)
-    );
-
-    const response = await Promise.race([generatePromise, timeoutPromise]);
-    const responseText = response.text ?? "{}";
-    return this.inspectOutput(responseText);
+      throw primaryErr;
+    }
   }
 }

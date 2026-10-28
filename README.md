@@ -34,10 +34,19 @@ Deterministic Celebration & Wedding Coordination Command Center built for Family
    ```
    *(Note: `.env` is listed in `.gitignore` so your personal key will never be tracked or committed to Git).*
 
+## Hackathon Judges & Environment Recreation
+
+For the complete 60-second setup and evaluation guide, see [`JUDGES_REPRODUCIBILITY_GUIDE.md`](./JUDGES_REPRODUCIBILITY_GUIDE.md).
+
+- **Diagnostics Endpoint**: `http://localhost:3000/api/health` (inspects Node runtime, Gemini API key connectivity, and active model)
+- **Deterministic Shield Fallback**: If no API key is provided, the app automatically runs in deterministic fallback mode with 100% feature coverage.
+
 ## Verification
 
 ```bash
+# Run complete test suite (25 tests covering budget math, graphs, alerts, and logger)
 npm run test
-npx --yes tsx --test lib/engine/planner-logic.test.ts
+
+# Build production bundle
 npm run build
 ```

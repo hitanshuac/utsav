@@ -4,15 +4,31 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import { handlePlannerRequest } from "./app/api/planner/route";
+import { SecureLLMClient } from "./lib/security/secure-llm-client";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json({ limit: "64kb" }));
+
+  // Health and Diagnostics Endpoint for Judges & Environment Verification
+  app.get("/api/health", (_req, res) => {
+    const llmStatus = SecureLLMClient.getInstance().getStatus();
+    res.json({
+      status: "ok",
+      nodeVersion: process.version,
+      timestamp: new Date().toISOString(),
+      llm: llmStatus,
+      env: {
+        geminiKeyConfigured: llmStatus.configured,
+        appUrl: process.env.APP_URL || `http://localhost:${PORT}`
+      }
+    });
+  });
 
   // Secure LLM Interceptor Endpoint (/api/planner)
   app.post("/api/planner", async (req, res) => {
@@ -41,7 +57,12 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Celebration & Event Planner server running on http://localhost:${PORT}`);
+    const status = SecureLLMClient.getInstance().getStatus();
+    console.log("=======================================================");
+    console.log(` Celebration & Event Planner Server running on http://localhost:${PORT}`);
+    console.log(` Health & Diagnostics: http://localhost:${PORT}/api/health`);
+    console.log(` Gemini AI Status: ${status.message}`);
+    console.log("=======================================================");
   });
 }
 
