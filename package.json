@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run tests",
+    "push:github": "bash scripts/git-sync.sh",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
   },
