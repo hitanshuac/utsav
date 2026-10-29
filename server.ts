@@ -15,13 +15,13 @@ import { EventPlanInput } from "./src/types/planner";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// In-memory sliding window rate limiter (30 requests/minute per IP)
+// In-memory sliding window rate limiter (15 requests/minute per IP)
 const requestRateMap = new Map<string, number[]>();
 function rateLimiter(req: Request, res: Response, next: NextFunction) {
   const ip = req.ip || req.socket.remoteAddress || "127.0.0.1";
   const now = Date.now();
   const windowMs = 60 * 1000;
-  const maxRequests = 30;
+  const maxRequests = 15;
 
   const timestamps = (requestRateMap.get(ip) || []).filter((t) => now - t < windowMs);
   if (timestamps.length >= maxRequests) {
@@ -45,7 +45,22 @@ function scrubPii(text: string): string {
     .replace(/\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{0,4}\b/g, "[REDACTED_ACCOUNT]");
 }
 
-async function startServer() {
+// Role-tailored narrative synthesis for Indian event planning personas
+function getRoleTailoredNarrative(persona: string, deficit: number): string {
+  const formattedDeficit = `₹${deficit.toLocaleString("en-IN")}`;
+  switch (persona) {
+    case "wedding_coordinator":
+      return `Identified a ${formattedDeficit} allocation overrun. Trade-off recommendations strictly safeguard SLA critical paths and vendor milestones while value-engineering non-contractual aesthetic items.`;
+    case "community_organizer":
+      return `Identified a ${formattedDeficit} community deficit. Trade-off recommendations rationalize per-thali feast overhead and municipal logistics to maximize open public participation within approved funds.`;
+    case "family_host":
+    default:
+      return `Identified a ${formattedDeficit} budget deficit. Trade-off recommendations safeguard core hospitality, family dining, and auspicious rituals while prudently trimming floral backdrops and discretionary contingency buffers.`;
+  }
+}
+
+
+export function createApp(): express.Express {
   const app = express();
   const PORT = Number(process.env.APP_PORT || process.env.PORT) || 3000;
 
@@ -146,7 +161,7 @@ async function startServer() {
           triageTier: evaluation.triageTier,
           deficit,
           strategies: fallbackStrategies,
-          narrative: `Identified a ₹${deficit.toLocaleString("en-IN")} deficit. Deterministic trade-off proposals have trimmed discretionary decor and consolidated catering courses without compromising core hospitality.`,
+          narrative: getRoleTailoredNarrative(planInput.personaLens || "family_host", deficit),
           provenance: "fallback"
         });
         return;
@@ -158,7 +173,8 @@ async function startServer() {
           deficit,
           categories: evaluation.scaledCategories,
           guestCount: planInput.guestCount,
-          priorityVibe: planInput.priorityVibe
+          priorityVibe: planInput.priorityVibe,
+          personaLens: planInput.personaLens
         })
       );
 
@@ -166,11 +182,14 @@ async function startServer() {
 Deficit to resolve: ₹${deficit}
 Category Allocations: ${sanitizedPayload}
 Priority Vibe: ${planInput.priorityVibe || "Balanced"}
-Propose 2-3 structured trade-off compromise strategies to absorb this exact deficit.
+Persona Lens: ${planInput.personaLens || "family_host"}
+Propose 3 structured trade-off compromise strategies ("Experience First", "Strict Budget Cap", "Guest Trim") to absorb this exact deficit.
+Provide a role-tailored strategic narrative for this persona.
 </event_evaluation>`;
 
       const systemInstruction = `You are UtsavAI's Strategic Trade-Off Advisor for Indian events and celebrations.
-Propose structured compromises (trimming decor, consolidating live catering counters, or replacing physical prints with digital).
+Persona lens: "${planInput.personaLens || "family_host"}".
+Propose 3 distinct trade-off strategies ("Experience First", "Strict Budget Cap", "Guest Trim") that absorb the deficit.
 Never alter the mathematical deficit.
 Return strictly valid JSON with the format:
 {
@@ -191,8 +210,8 @@ Return strictly valid JSON with the format:
           triageTier: evaluation.triageTier,
           deficit,
           strategies: parsed.strategies || [],
-          narrative: parsed.narrative || "AI trade-off suggestions generated.",
-          provenance: "live_ai"
+          narrative: parsed.narrative || getRoleTailoredNarrative(planInput.personaLens || "family_host", deficit),
+          provenance: "ai"
         });
       } catch {
         // Graceful circuit-breaker fallback
@@ -205,7 +224,7 @@ Return strictly valid JSON with the format:
           triageTier: evaluation.triageTier,
           deficit,
           strategies: fallbackStrategies,
-          narrative: "Real-time AI consultant was busy. Applied verified deterministic trade-off allocation.",
+          narrative: getRoleTailoredNarrative(planInput.personaLens || "family_host", deficit),
           provenance: "fallback"
         });
       }
@@ -237,7 +256,10 @@ Return strictly valid JSON with the format:
 
       if (!status.configured) {
         const audit = auditVendorQuoteOffline(sanitizedNote);
-        res.json(audit);
+        res.json({
+          ...audit,
+          provenance: "fallback"
+        });
         return;
       }
 
@@ -246,29 +268,50 @@ Vendor Quotation Note:
 """
 ${sanitizedNote}
 """
-Analyze for missing clauses (GST 18%, generator fuel, cleaning fees, overtime) and draft 3 polite negotiation questions.
+Analyze for missing clauses (GST 18%, generator fuel, cleaning fees, overtime, advance deposit) and draft 3 polite negotiation questions.
 </event_evaluation>`;
 
       const systemInstruction = `You are UtsavAI's Vendor Quote Auditor.
-Extract quotedAmount, detectedInclusions (list), flaggedHiddenCosts (list of omitted items like GST, generator, cleaning fees), and up to 3 sharp negotiationQuestions.
+Pre-audit and normalize plain-text vendor notes for Indian celebrations.
+Extract:
+- quotedAmount (number)
+- inclusions (list of detected scope items like Catering, Decor, Sound)
+- hiddenCostRisks (list of missing clauses among GST 18%, generator fuel, cleaning fees, overtime, and advance deposit)
+- 3 sharp, polite negotiationQuestions.
 Return strictly valid JSON:
 {
   "vendorName": "string",
   "quotedAmount": 150000,
-  "detectedInclusions": ["string"],
-  "flaggedHiddenCosts": ["string"],
+  "inclusions": ["Feast & Menu Service"],
+  "hiddenCostRisks": ["GST (18%) not mentioned"],
   "negotiationQuestions": ["q1", "q2", "q3"]
 }`;
 
       try {
         const rawResponse = await llmClient.executeStructuredPrompt(systemInstruction, prompt);
         const parsed = JSON.parse(rawResponse);
+        const detectedInclusions = parsed.detectedInclusions || parsed.inclusions || [];
+        const flaggedHiddenCosts = parsed.flaggedHiddenCosts || parsed.hiddenCostRisks || [];
+        const negotiationQuestions = Array.isArray(parsed.negotiationQuestions)
+          ? parsed.negotiationQuestions.slice(0, 3)
+          : [];
+
         res.json({
-          ...parsed,
-          provenance: "live_ai"
+          vendorName: parsed.vendorName || "Audited Vendor Quotation",
+          quotedAmount: Number(parsed.quotedAmount) || 0,
+          detectedInclusions,
+          inclusions: detectedInclusions,
+          flaggedHiddenCosts,
+          hiddenCostRisks: flaggedHiddenCosts,
+          negotiationQuestions,
+          provenance: "ai"
         });
       } catch {
-        res.json(auditVendorQuoteOffline(sanitizedNote));
+        const fallbackAudit = auditVendorQuoteOffline(sanitizedNote);
+        res.json({
+          ...fallbackAudit,
+          provenance: "fallback"
+        });
       }
     } catch (err) {
       res.status(500).json({
@@ -290,6 +333,13 @@ Return strictly valid JSON:
     }
   });
 
+  return app;
+}
+
+export async function startServer() {
+  const app = createApp();
+  const PORT = Number(process.env.APP_PORT || process.env.PORT) || 3000;
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -304,7 +354,7 @@ Return strictly valid JSON:
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  return app.listen(PORT, "0.0.0.0", () => {
     const status = SecureLLMClient.getInstance().getStatus();
     console.log("=======================================================");
     console.log(` UtsavAI Celebration & Event Planner Server running on http://localhost:${PORT}`);
@@ -316,4 +366,12 @@ Return strictly valid JSON:
   });
 }
 
-startServer();
+const isDirectRun = Boolean(
+  process.argv[1] &&
+  (fileURLToPath(import.meta.url) === path.resolve(process.argv[1]) ||
+   process.argv[1].endsWith("server.ts"))
+);
+
+if (isDirectRun) {
+  startServer();
+}

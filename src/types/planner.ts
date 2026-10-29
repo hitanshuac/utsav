@@ -27,7 +27,7 @@ export type EventCategory =
   | "logistics"
   | "miscellaneous";
 
-export interface BudgetItem {
+export interface BudgetCategoryItem {
   id: string;
   category: EventCategory;
   label: string;
@@ -36,6 +36,8 @@ export interface BudgetItem {
   isEstimate: boolean;
   notes?: string;
 }
+
+export type BudgetItem = BudgetCategoryItem;
 
 export interface MilestoneTask {
   id: string;
@@ -77,15 +79,18 @@ export interface PlannerEvaluationResult {
   topologicalOrder: string[];
   isCyclic: boolean;
   evaluationTimestamp: string;
+  urgencyScore: number;
 }
 
 export interface VendorAuditResult {
   vendorName: string;
   quotedAmount: number;
   detectedInclusions: string[];
+  inclusions: string[];
   flaggedHiddenCosts: string[];
+  hiddenCostRisks: string[];
   negotiationQuestions: string[];
-  provenance: "live_ai" | "fallback";
+  provenance: "live_ai" | "ai" | "fallback";
 }
 
 export interface TradeoffAdjustment {
@@ -94,16 +99,18 @@ export interface TradeoffAdjustment {
   rationale: string;
 }
 
-export interface TradeoffStrategy {
+export interface TradeoffOption {
   strategyTitle: string;
   description: string;
   adjustments: TradeoffAdjustment[];
 }
 
+export type TradeoffStrategy = TradeoffOption;
+
 export interface RebalanceApiResponse {
   triageTier: PlanningTriageTier;
   deficit: number;
-  strategies: TradeoffStrategy[];
+  strategies: TradeoffOption[];
   narrative: string;
-  provenance: "live_ai" | "fallback";
+  provenance: "live_ai" | "ai" | "fallback";
 }

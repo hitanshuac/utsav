@@ -17,31 +17,71 @@
     },
     "provenance": {
       "type": "string",
-      "enum": ["live_ai", "fallback"]
+      "enum": ["live_ai", "ai", "fallback"]
     },
     "strategies": {
       "type": "array",
       "items": {
-        "type": "object",
-        "required": ["strategyTitle", "description", "adjustments"],
-        "properties": {
-          "strategyTitle": { "type": "string" },
-          "description": { "type": "string" },
-          "adjustments": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": ["category", "delta", "rationale"],
-              "properties": {
-                "category": {
-                  "type": "string",
-                  "enum": ["venue", "catering", "decor", "photography", "logistics", "miscellaneous"]
-                },
-                "delta": { "type": "number" },
-                "rationale": { "type": "string" }
-              }
-            }
+        "$ref": "#/definitions/TradeoffOption"
+      }
+    }
+  },
+  "definitions": {
+    "TradeoffAdjustment": {
+      "type": "object",
+      "required": ["category", "delta", "rationale"],
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": ["venue", "catering", "decor", "photography", "logistics", "miscellaneous"]
+        },
+        "delta": { "type": "number" },
+        "rationale": { "type": "string" }
+      }
+    },
+    "TradeoffOption": {
+      "type": "object",
+      "required": ["strategyTitle", "description", "adjustments"],
+      "properties": {
+        "strategyTitle": { "type": "string" },
+        "description": { "type": "string" },
+        "adjustments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TradeoffAdjustment"
           }
+        }
+      }
+    },
+    "VendorAuditResult": {
+      "type": "object",
+      "required": ["vendorName", "quotedAmount", "detectedInclusions", "flaggedHiddenCosts", "negotiationQuestions", "provenance"],
+      "properties": {
+        "vendorName": { "type": "string" },
+        "quotedAmount": { "type": "number", "minimum": 0 },
+        "detectedInclusions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "inclusions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "flaggedHiddenCosts": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "hiddenCostRisks": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "negotiationQuestions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "provenance": {
+          "type": "string",
+          "enum": ["live_ai", "ai", "fallback"]
         }
       }
     }

@@ -2,8 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   calculateBudgetSummary,
-  applyDynamicDelta,
-  applyTradeoffResolution
+  applyDynamicDelta
 } from "./budget-math";
 import {
   sortMilestonesTopologically,

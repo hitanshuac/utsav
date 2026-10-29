@@ -1,5 +1,4 @@
-import React from "react";
-import { Users, ShieldCheck, ArrowRight, TrendingUp, Sparkles, AlertCircle } from "lucide-react";
+import { ShieldCheck, Sparkles } from "lucide-react";
 import { calculateGuestBuffer } from "../../lib/engine/guest-buffer";
 import { usePlannerStore } from "../../lib/store/usePlannerStore";
 

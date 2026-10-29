@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Download, SlidersHorizontal, ChevronDown, ChevronUp, ArrowLeft } from "lucide-react";
 import { TMinusAlertBanner } from "../components/alerts/TMinusAlertBanner";
 import { BudgetProgress } from "../components/budget/BudgetProgress";

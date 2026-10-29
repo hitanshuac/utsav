@@ -1,20 +1,16 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   AlertTriangle,
   Clock,
   MessageCircle,
   CheckCircle2,
-  Calendar,
-  Phone,
-  RotateCcw,
-  Sparkles,
-  ChevronRight
+  Phone
 } from "lucide-react";
 import { computeScheduledMilestones } from "../../lib/engine/dependency-graph";
 import { computeDelayCascade, buildWhatsAppReminderUrl } from "../../lib/engine/delay-cascade";
 import { CATEGORY_PASTEL } from "../../lib/pastel";
 import { usePlannerStore } from "../../lib/store/usePlannerStore";
-import { MilestoneTask, TMinusStage } from "../../lib/types";
+import { TMinusStage } from "../../lib/types";
 
 export function TMinusCascadeHub() {
   const milestones = usePlannerStore((s) => s.milestones);
@@ -162,10 +158,6 @@ export function TMinusCascadeHub() {
           const colors = CATEGORY_PASTEL[task.category];
           const isInspected = activeDelayedId === task.id;
           const currentDelay = task.delayMinutes ?? 0;
-          const targetDateStr =
-            task.targetDate instanceof Date
-              ? task.targetDate.toISOString().slice(0, 10)
-              : String(task.targetDate);
 
           const waUrl = task.vendorContact
             ? buildWhatsAppReminderUrl(

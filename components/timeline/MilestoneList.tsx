@@ -25,7 +25,7 @@ export const MilestoneList: React.FC = () => {
   const [newTitle, setNewTitle] = useState("");
   const [newDaysBefore, setNewDaysBefore] = useState("21");
   const [newCategory, setNewCategory] = useState<EventCategory>("logistics");
-  const [newUrgency, setNewUrgency] = useState<MilestoneTask["urgency"]>("medium");
+  const newUrgency: MilestoneTask["urgency"] = "medium";
   const [newDependsOn, setNewDependsOn] = useState<string>("");
   const [formError, setFormError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "completed">("all");

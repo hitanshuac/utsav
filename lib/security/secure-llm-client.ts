@@ -28,7 +28,7 @@ export class SecureLLMClient {
     this.initClient();
   }
 
-  private initClient(): void {
+  public initClient(): void {
     const rawKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
     const isPlaceholder = !rawKey || KNOWN_PLACEHOLDERS.has(rawKey) || rawKey.length < 10;
 
@@ -54,10 +54,7 @@ export class SecureLLMClient {
   }
 
   public getStatus(): LLMStatus {
-    // Re-check in case .env was modified at runtime
-    if (!this.ai) {
-      this.initClient();
-    }
+    this.initClient();
 
     if (this.ai) {
       return {

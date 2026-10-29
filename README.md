@@ -85,6 +85,6 @@ npm start                  # Production Express server on port 3000
 | [PRODUCT_SPEC.md](docs/specs/PRODUCT_SPEC.md) | Event execution taxonomy, personas, urgency bands, and requirement IDs (`PM-n`) | Challenge 5 Rubric |
 | [DESIGN_SPEC.md](docs/specs/DESIGN_SPEC.md) | 4-Region solid-surface tokens, layout grid, and UX criteria (`UX-n`) | WCAG 2.1 AA |
 | [03_SECURITY.md](docs/specs/03_SECURITY.md) | Zero-Auth, Secret Hygiene, XML Delimiters, Network Boundary PII Guards | OWASP Top 10 / LLM Top 10 |
-| [DECISIONS.md](docs/specs/DECISIONS.md) | Architectural Decision Records (ADR-1 through ADR-6) | Architecture |
+| [DECISIONS.md](docs/specs/DECISIONS.md) | Architectural Decision Records (ADR-1 through ADR-8) | Architecture |
 | [QA_REPORT.md](docs/specs/QA_REPORT.md) | Resilience matrix (16 scenarios), build gate, compliance scans, GO verdict | Release Gate |
 | [HANDOVER.md](HANDOVER.md) | Antigravity IDE 4-persona delivery pipeline & skill integration | Antigravity IDE |

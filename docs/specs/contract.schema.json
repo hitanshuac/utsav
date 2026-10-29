@@ -43,49 +43,109 @@
     "budgetItems": {
       "type": "array",
       "items": {
-        "type": "object",
-        "required": ["id", "category", "label", "allocatedAmount", "actualAmount", "isEstimate"],
-        "properties": {
-          "id": { "type": "string" },
-          "category": {
-            "type": "string",
-            "enum": ["venue", "catering", "decor", "photography", "logistics", "miscellaneous"]
-          },
-          "label": { "type": "string" },
-          "allocatedAmount": { "type": "number", "minimum": 0 },
-          "actualAmount": { "type": "number", "minimum": 0 },
-          "isEstimate": { "type": "boolean" },
-          "notes": { "type": "string" }
-        }
+        "$ref": "#/definitions/BudgetCategoryItem"
       }
     },
     "milestones": {
       "type": "array",
       "items": {
-        "type": "object",
-        "required": ["id", "title", "deadlineDaysBeforeEvent", "category", "dependsOn", "status", "urgency"],
-        "properties": {
-          "id": { "type": "string" },
-          "title": { "type": "string" },
-          "deadlineDaysBeforeEvent": { "type": "integer", "minimum": 0 },
-          "category": {
-            "type": "string",
-            "enum": ["venue", "catering", "decor", "photography", "logistics", "miscellaneous"]
-          },
-          "dependsOn": {
-            "type": "array",
-            "items": { "type": "string" }
-          },
-          "status": {
-            "type": "string",
-            "enum": ["pending", "in_progress", "completed"]
-          },
-          "urgency": {
-            "type": "string",
-            "enum": ["low", "medium", "critical"]
-          },
-          "leadTimeDays": { "type": "integer", "minimum": 0 }
-        }
+        "$ref": "#/definitions/MilestoneTask"
+      }
+    }
+  },
+  "definitions": {
+    "BudgetCategoryItem": {
+      "type": "object",
+      "required": ["id", "category", "label", "allocatedAmount", "actualAmount", "isEstimate"],
+      "properties": {
+        "id": { "type": "string" },
+        "category": {
+          "type": "string",
+          "enum": ["venue", "catering", "decor", "photography", "logistics", "miscellaneous"]
+        },
+        "label": { "type": "string" },
+        "allocatedAmount": { "type": "number", "minimum": 0 },
+        "actualAmount": { "type": "number", "minimum": 0 },
+        "isEstimate": { "type": "boolean" },
+        "notes": { "type": "string" }
+      }
+    },
+    "MilestoneTask": {
+      "type": "object",
+      "required": ["id", "title", "deadlineDaysBeforeEvent", "category", "dependsOn", "status", "urgency"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "deadlineDaysBeforeEvent": { "type": "integer", "minimum": 0 },
+        "category": {
+          "type": "string",
+          "enum": ["venue", "catering", "decor", "photography", "logistics", "miscellaneous"]
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_progress", "completed"]
+        },
+        "urgency": {
+          "type": "string",
+          "enum": ["low", "medium", "critical"]
+        },
+        "leadTimeDays": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "PlannerEvaluationResult": {
+      "type": "object",
+      "required": [
+        "triageTier",
+        "totalAllocated",
+        "budgetCap",
+        "variance",
+        "overrunAmount",
+        "scaledCategories",
+        "criticalPathBottlenecks",
+        "topologicalOrder",
+        "isCyclic",
+        "evaluationTimestamp",
+        "urgencyScore"
+      ],
+      "properties": {
+        "triageTier": {
+          "type": "string",
+          "enum": ["CRITICAL_OVERRUN", "TIMELINE_BOTTLENECK", "VENDOR_CLARIFICATION", "ON_TRACK"]
+        },
+        "totalAllocated": { "type": "number" },
+        "budgetCap": { "type": "number" },
+        "variance": { "type": "number" },
+        "overrunAmount": { "type": "number" },
+        "scaledCategories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["category", "allocatedAmount", "isVariable"],
+            "properties": {
+              "category": {
+                "type": "string",
+                "enum": ["venue", "catering", "decor", "photography", "logistics", "miscellaneous"]
+              },
+              "allocatedAmount": { "type": "number" },
+              "isVariable": { "type": "boolean" }
+            }
+          }
+        },
+        "criticalPathBottlenecks": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "topologicalOrder": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "isCyclic": { "type": "boolean" },
+        "evaluationTimestamp": { "type": "string" },
+        "urgencyScore": { "type": "number", "minimum": 0, "maximum": 100 }
       }
     }
   }

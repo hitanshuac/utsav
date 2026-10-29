@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   ShieldAlert,
   Wallet,
@@ -6,9 +6,7 @@ import {
   Circle,
   Plus,
   Trash2,
-  Phone,
-  Sparkles,
-  AlertTriangle
+  Phone
 } from "lucide-react";
 import { usePlannerStore } from "../../lib/store/usePlannerStore";
 import { LifafaCategory } from "../../lib/types";
@@ -30,7 +28,6 @@ export function SosCashLedger() {
 
   const emergencyChecklist = usePlannerStore((s) => s.emergencyChecklist);
   const toggleEmergencyItem = usePlannerStore((s) => s.toggleEmergencyItem);
-  const addEmergencyItem = usePlannerStore((s) => s.addEmergencyItem);
 
   // New lifafa state
   const [recipient, setRecipient] = useState("");

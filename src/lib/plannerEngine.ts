@@ -14,11 +14,14 @@ import {
   EventPlanInput,
   PlannerEvaluationResult,
   ScaledCategory,
-  TradeoffStrategy,
+  TradeoffOption,
   VendorAuditResult,
   EventCategory,
   PlanningTriageTier
 } from "../types/planner";
+import { generateIcsCalendar, generateWhatsAppLink } from "./actionDispatchers";
+
+export { generateIcsCalendar, generateWhatsAppLink };
 
 /**
  * Category scaling configuration.
@@ -155,7 +158,7 @@ export function resolveMilestoneDAG(
   const bottlenecks: string[] = [];
   for (const task of milestones) {
     const leadTime = task.leadTimeDays || task.deadlineDaysBeforeEvent;
-    if (leadTime > daysRemaining && task.status !== "completed") {
+    if ((leadTime > daysRemaining || task.deadlineDaysBeforeEvent > daysRemaining) && task.status !== "completed") {
       bottlenecks.push(task.id);
     }
   }
@@ -165,6 +168,40 @@ export function resolveMilestoneDAG(
     bottlenecks,
     isCyclic
   };
+}
+
+/**
+ * Computes deterministic 0-100 continuous Urgency Score per PRODUCT_SPEC.md.
+ */
+export function computeUrgencyScore(
+  totalAllocated: number,
+  budgetCap: number,
+  bottlenecks: string[],
+  unverifiedCount: number,
+  maxLeadTimeDeficitDays: number = 0
+): number {
+  const overrun = totalAllocated - budgetCap;
+
+  // Tier 1: CRITICAL_OVERRUN (Score 85 - 100)
+  if (overrun > 0) {
+    const overrunPercent = budgetCap > 0 ? (overrun / budgetCap) * 100 : 100;
+    return Math.min(100, Math.round(85 + (Math.min(overrunPercent, 25) / 25) * 15));
+  }
+
+  // Tier 2: TIMELINE_BOTTLENECK (Score 65 - 84)
+  if (bottlenecks.length > 0) {
+    const deficitScale = Math.min(Math.max(1, maxLeadTimeDeficitDays), 30) / 30;
+    return Math.min(84, Math.round(65 + deficitScale * 19));
+  }
+
+  // Tier 3: VENDOR_CLARIFICATION (Score 40 - 64)
+  if (unverifiedCount > 0) {
+    return Math.min(64, 40 + unverifiedCount * 5);
+  }
+
+  // Tier 4: ON_TRACK (Score 0 - 39)
+  const utilization = budgetCap > 0 ? Math.min(1, totalAllocated / budgetCap) : 0;
+  return Math.round(utilization * 35);
 }
 
 /**
@@ -180,17 +217,34 @@ export function evaluateEventPlan(input: EventPlanInput): PlannerEvaluationResul
   const budget = computeBudgetTotals(scaledCategories, input.totalBudgetCap);
   const dag = resolveMilestoneDAG(input.milestones, input.daysRemaining);
 
-  // Determine Triage Tier
-  let triageTier: PlanningTriageTier = "ON_TRACK";
-  if (budget.isOverrun) {
-    triageTier = "CRITICAL_OVERRUN";
-  } else if (dag.bottlenecks.length > 0) {
-    triageTier = "TIMELINE_BOTTLENECK";
-  } else {
-    const hasUnverifiedQuote = input.budgetItems.some((item) => item.isEstimate);
-    if (hasUnverifiedQuote) {
-      triageTier = "VENDOR_CLARIFICATION";
+  const unverifiedCount = input.budgetItems.filter((item) => item.isEstimate).length;
+  let maxLeadTimeDeficitDays = 0;
+  for (const task of input.milestones) {
+    if (dag.bottlenecks.includes(task.id)) {
+      const leadTime = task.leadTimeDays || task.deadlineDaysBeforeEvent;
+      const deficit = Math.max(0, leadTime - input.daysRemaining);
+      if (deficit > maxLeadTimeDeficitDays) {
+        maxLeadTimeDeficitDays = deficit;
+      }
     }
+  }
+
+  const urgencyScore = computeUrgencyScore(
+    budget.totalAllocated,
+    budget.budgetCap,
+    dag.bottlenecks,
+    unverifiedCount,
+    maxLeadTimeDeficitDays
+  );
+
+  // Determine Triage Tier strictly from Urgency Score bands
+  let triageTier: PlanningTriageTier = "ON_TRACK";
+  if (budget.isOverrun || urgencyScore >= 85) {
+    triageTier = "CRITICAL_OVERRUN";
+  } else if (dag.bottlenecks.length > 0 || urgencyScore >= 65) {
+    triageTier = "TIMELINE_BOTTLENECK";
+  } else if (unverifiedCount > 0 || urgencyScore >= 40) {
+    triageTier = "VENDOR_CLARIFICATION";
   }
 
   return {
@@ -203,19 +257,21 @@ export function evaluateEventPlan(input: EventPlanInput): PlannerEvaluationResul
     criticalPathBottlenecks: dag.bottlenecks,
     topologicalOrder: dag.topologicalOrder,
     isCyclic: dag.isCyclic,
-    evaluationTimestamp: new Date().toISOString()
+    evaluationTimestamp: new Date().toISOString(),
+    urgencyScore
   };
 }
 
 /**
  * Offline Deterministic Trade-Off Strategy Generator.
- * Provides instant (<5ms) balanced compromise proposals without needing Gemini API.
+ * Computes 3 mathematical trade-off options in <5ms ("Experience First", "Strict Budget Cap", "Guest Trim")
+ * so the app functions 100% offline without an API key.
  */
 export function generateDeterministicTradeoffs(
   deficit: number,
   scaledCategories: ScaledCategory[],
   _vibe?: string
-): TradeoffStrategy[] {
+): TradeoffOption[] {
   if (deficit <= 0) {
     return [
       {
@@ -227,65 +283,76 @@ export function generateDeterministicTradeoffs(
   }
 
   const decor = scaledCategories.find((c) => c.category === "decor")?.allocatedAmount || 0;
-  const misc = scaledCategories.find((c) => c.category === "miscellaneous")?.allocatedAmount || 0;
   const catering = scaledCategories.find((c) => c.category === "catering")?.allocatedAmount || 0;
   const photo = scaledCategories.find((c) => c.category === "photography")?.allocatedAmount || 0;
+  const logistics = scaledCategories.find((c) => c.category === "logistics")?.allocatedAmount || 0;
 
-  const strategies: TradeoffStrategy[] = [];
+  const strategies: TradeoffOption[] = [];
 
-  // Strategy 1: Balanced Prudent Trim (Spread across Decor & Misc)
-  const trimDecor = Math.min(Math.round(deficit * 0.6), Math.round(decor * 0.3));
-  const trimMisc = Math.min(Math.round(deficit * 0.4), Math.round(misc * 0.5));
+  // Option 1: "Experience First" (Prudent Aesthetic Trim)
+  // Protects catering and hospitality, absorbs deficit through floral/stage decor and contingency
+  const trimDecor1 = Math.min(Math.round(deficit * 0.6), Math.round(decor * 0.35));
+  const trimMisc1 = Math.max(0, deficit - trimDecor1);
   strategies.push({
-    strategyTitle: "Prudent Aesthetic Trim (Decor & Contingency)",
+    strategyTitle: "Experience First (Prudent Aesthetic Trim)",
     description: "Preserve catering and venue excellence while consolidating decorative floral setups and trimming discretionary miscellaneous buffers.",
     adjustments: [
       {
         category: "decor",
-        delta: -trimDecor,
+        delta: -trimDecor1,
         rationale: "Opt for seasonal local marigolds and minimal entrance arches rather than imported exotic blooms."
       },
       {
         category: "miscellaneous",
-        delta: -trimMisc,
+        delta: -trimMisc1,
         rationale: "Tighten discretionary emergency buffer to meet strict budget cap."
       }
     ]
   });
 
-  // Strategy 2: Per-Plate & Menu Course Optimization
-  const trimCatering = Math.min(Math.round(deficit * 0.7), Math.round(catering * 0.18));
+  // Option 2: "Strict Budget Cap" (Menu & Course Rationalization)
+  // Rigidly caps budget by optimizing per-plate menu, trimming live counters and decor
+  const trimCatering2 = Math.min(Math.round(deficit * 0.7), Math.round(catering * 0.2));
+  const trimDecor2 = Math.max(0, deficit - trimCatering2);
   strategies.push({
-    strategyTitle: "Menu Rationalization (Streamlined Counters)",
+    strategyTitle: "Strict Budget Cap (Menu Rationalization)",
     description: "Streamline live chaat counters from 6 to 4 and replace imported dessert selections with signature Indian classics.",
     adjustments: [
       {
         category: "catering",
-        delta: -trimCatering,
+        delta: -trimCatering2,
         rationale: "Reduce 2 live appetizer counters, saving ₹150-₹250 per plate without affecting main feast quality."
       },
       {
         category: "decor",
-        delta: -(deficit - trimCatering),
+        delta: -trimDecor2,
         rationale: "Absorb remaining variance through stage backdrop simplification."
       }
     ]
   });
 
-  // Strategy 3: Digital Media & Photography Package Tuning
-  const trimPhoto = Math.min(Math.round(deficit * 0.5), Math.round(photo * 0.25));
+  // Option 3: "Guest Trim" (Variable Headcount & Logistics Scaling)
+  // Calibrates variable logistics shuttles, valet, and media packages without touching core feast
+  const trimLogistics3 = Math.min(Math.round(deficit * 0.4), Math.max(0, Math.round(logistics * 0.4)));
+  const trimPhoto3 = Math.min(Math.round(deficit * 0.4), Math.max(0, Math.round(photo * 0.25)));
+  const trimMisc3 = Math.max(0, deficit - (trimLogistics3 + trimPhoto3));
   strategies.push({
-    strategyTitle: "Digital Deliverables Consolidation",
-    description: "Retain traditional cinema capture while replacing physical velvet heirloom albums with high-res digital cloud delivery.",
+    strategyTitle: "Guest Trim (Headcount & Logistics Scaling)",
+    description: "Calibrate outstation guest shuttles, valet deployment, and physical media prints to balance without touching feast quality.",
     adjustments: [
       {
+        category: "logistics",
+        delta: -trimLogistics3,
+        rationale: "Optimize guest shuttle pickup routes and valet parking roster."
+      },
+      {
         category: "photography",
-        delta: -trimPhoto,
-        rationale: "Remove 2 printed heavy coffee-table albums and deliver 4K digital gallery link."
+        delta: -trimPhoto3,
+        rationale: "Switch printed luxury coffee-table albums to high-res digital cloud gallery links."
       },
       {
         category: "miscellaneous",
-        delta: -(deficit - trimPhoto),
+        delta: -trimMisc3,
         rationale: "Rebalance residual deficit from event miscellaneous buffer."
       }
     ]
@@ -295,8 +362,13 @@ export function generateDeterministicTradeoffs(
 }
 
 /**
- * Lightweight Text-Only Vendor Quote Auditor (Offline Deterministic Fallback).
- * Detects missing GST, fuel generator surcharges, security deposits, and generates 3 targeted negotiation questions.
+ * Deterministic Rule-Based Vendor Pre-Auditor.
+ * Before any LLM call, scans raw vendor text notes for 5 mandatory Indian event inclusions:
+ * 1. GST / taxes
+ * 2. Generator / power backup
+ * 3. Cleaning / porterage
+ * 4. Overtime rates
+ * 5. Advance deposit %
  */
 export function auditVendorQuoteOffline(vendorNote: string): VendorAuditResult {
   const lower = vendorNote.toLowerCase();
@@ -323,86 +395,77 @@ export function auditVendorQuoteOffline(vendorNote: string): VendorAuditResult {
   ) {
     detectedInclusions.push("Feast & Menu Service");
   }
-  if (lower.includes("decor") || lower.includes("flower") || lower.includes("stage")) detectedInclusions.push("Stage & Entrance Decor");
-  if (lower.includes("photo") || lower.includes("video") || lower.includes("album")) detectedInclusions.push("Photography & Videography");
-  if (lower.includes("sound") || lower.includes("dj") || lower.includes("mic")) detectedInclusions.push("Sound & Acoustic Setup");
-  if (detectedInclusions.length === 0) detectedInclusions.push("Standard Service Scope");
+  if (lower.includes("decor") || lower.includes("flower") || lower.includes("stage") || lower.includes("mandap")) {
+    detectedInclusions.push("Stage & Entrance Decor");
+  }
+  if (lower.includes("photo") || lower.includes("video") || lower.includes("album") || lower.includes("drone")) {
+    detectedInclusions.push("Photography & Videography");
+  }
+  if (lower.includes("sound") || lower.includes("dj") || lower.includes("mic") || lower.includes("speaker")) {
+    detectedInclusions.push("Sound & Acoustic Setup");
+  }
+  if (lower.includes("generator") || lower.includes("genset") || lower.includes("power backup")) {
+    detectedInclusions.push("Power Backup Included");
+  }
+  if (lower.includes("cleaning") || lower.includes("housekeeping")) {
+    detectedInclusions.push("Cleaning Services Included");
+  }
+  if (detectedInclusions.length === 0) {
+    detectedInclusions.push("Standard Service Scope");
+  }
 
-  // Hidden costs checks
+  // 1. Mandatory Check: GST / Taxes
   if (!lower.includes("gst") && !lower.includes("tax")) {
     flaggedHiddenCosts.push("GST (18%) not mentioned — potential +18% invoice surprise");
     negotiationQuestions.push("Does your quoted figure include 18% GST, or will taxes be billed additionally?");
   }
-  if (!lower.includes("generator") && !lower.includes("genset") && !lower.includes("diesel")) {
+
+  // 2. Mandatory Check: Generator / Power Backup
+  if (!lower.includes("generator") && !lower.includes("genset") && !lower.includes("diesel") && !lower.includes("power backup") && !lower.includes("dg")) {
     flaggedHiddenCosts.push("Generator/DG fuel charges unlisted (common ₹15,000–₹25,000 add-on)");
     negotiationQuestions.push("Are backup generator fuel running hours included in this quote or charged per hour?");
   }
-  if (!lower.includes("cleaning") && !lower.includes("housekeeping") && !lower.includes("trash")) {
+
+  // 3. Mandatory Check: Cleaning / Porterage
+  if (!lower.includes("cleaning") && !lower.includes("housekeeping") && !lower.includes("trash") && !lower.includes("porterage") && !lower.includes("waste")) {
     flaggedHiddenCosts.push("Post-event venue trash disposal & deep cleaning deposit omitted");
     negotiationQuestions.push("Who is responsible for post-event hall cleaning and waste clearance fees?");
   }
 
-  // Ensure 3 questions
+  // 4. Mandatory Check: Overtime Rates
+  if (!lower.includes("overtime") && !lower.includes("extra hour") && !lower.includes("curfew") && !lower.includes("late night")) {
+    flaggedHiddenCosts.push("Overtime/midnight curfew charges unstated (applicable after 11 PM)");
+    if (negotiationQuestions.length < 3) {
+      negotiationQuestions.push("What is your hourly overtime rate if celebrations extend past midnight?");
+    }
+  }
+
+  // 5. Mandatory Check: Advance Deposit %
+  if (!lower.includes("advance") && !lower.includes("deposit") && !lower.includes("token") && !lower.includes("payment schedule")) {
+    flaggedHiddenCosts.push("Advance deposit % and milestone payment schedule not formalized");
+    if (negotiationQuestions.length < 3) {
+      negotiationQuestions.push("What is the advance token deposit percentage and payment milestone schedule?");
+    }
+  }
+
+  // Ensure exactly 3 negotiation questions
   while (negotiationQuestions.length < 3) {
     negotiationQuestions.push("What is the refund and cancellation policy if event dates shift by 14 days?");
   }
+
+  const finalQuestions = negotiationQuestions.slice(0, 3);
 
   return {
     vendorName: "Audited Vendor Quotation",
     quotedAmount,
     detectedInclusions,
+    inclusions: detectedInclusions,
     flaggedHiddenCosts,
-    negotiationQuestions: negotiationQuestions.slice(0, 3),
+    hiddenCostRisks: flaggedHiddenCosts,
+    negotiationQuestions: finalQuestions,
     provenance: "fallback"
   };
 }
 
-/**
- * RFC 5545 iCalendar (.ics) Generator for Milestone Deadlines.
- */
-export function generateIcsCalendar(
-  milestones: MilestoneTask[],
-  eventDateStr: string,
-  eventTitle: string
-): string {
-  const eventDate = new Date(eventDateStr);
-  const nowStr = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+export const preAuditVendorQuote = auditVendorQuoteOffline;
 
-  let ics = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//UtsavAI//Event Planner Execution Engine//EN",
-    "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH"
-  ];
-
-  for (const task of milestones) {
-    const taskDate = new Date(eventDate.getTime() - task.deadlineDaysBeforeEvent * 86400000);
-    const dateFormatted = taskDate.toISOString().split("T")[0].replace(/-/g, "");
-
-    ics.push(
-      "BEGIN:VEVENT",
-      `UID:utsav-${task.id}-${dateFormatted}@utsavai.org`,
-      `DTSTAMP:${nowStr}`,
-      `DTSTART;VALUE=DATE:${dateFormatted}`,
-      `SUMMARY:[${eventTitle}] ${task.title}`,
-      `DESCRIPTION:UtsavAI Milestone Task\\nCategory: ${task.category}\\nUrgency: ${task.urgency}\\nStatus: ${task.status}`,
-      `STATUS:${task.status === "completed" ? "CONFIRMED" : "TENTATIVE"}`,
-      "END:VEVENT"
-    );
-  }
-
-  ics.push("END:VCALENDAR");
-  return ics.join("\r\n");
-}
-
-/**
- * Sanitizes and generates WhatsApp direct negotiation link.
- */
-export function generateWhatsAppLink(phoneNumber: string, message: string): string {
-  const cleanPhone = phoneNumber.replace(/[^\d]/g, "");
-  const encodedText = encodeURIComponent(message.trim());
-  return cleanPhone
-    ? `https://wa.me/${cleanPhone}?text=${encodedText}`
-    : `https://wa.me/?text=${encodedText}`;
-}
