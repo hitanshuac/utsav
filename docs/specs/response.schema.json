@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RebalanceApiResponse",
+  "type": "object",
+  "required": ["triageTier", "deficit", "strategies", "narrative", "provenance"],
+  "properties": {
+    "triageTier": {
+      "type": "string",
+      "enum": ["CRITICAL_OVERRUN", "TIMELINE_BOTTLENECK", "VENDOR_CLARIFICATION", "ON_TRACK"]
+    },
+    "deficit": {
+      "type": "number",
+      "minimum": 0
+    },
+    "narrative": {
+      "type": "string"
+    },
+    "provenance": {
+      "type": "string",
+      "enum": ["live_ai", "fallback"]
+    },
+    "strategies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["strategyTitle", "description", "adjustments"],
+        "properties": {
+          "strategyTitle": { "type": "string" },
+          "description": { "type": "string" },
+          "adjustments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["category", "delta", "rationale"],
+              "properties": {
+                "category": {
+                  "type": "string",
+                  "enum": ["venue", "catering", "decor", "photography", "logistics", "miscellaneous"]
+                },
+                "delta": { "type": "number" },
+                "rationale": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

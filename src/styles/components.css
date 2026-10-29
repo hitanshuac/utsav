@@ -1,0 +1,179 @@
+/**
+ * UtsavAI — Solid-Surface Component Styles
+ * WCAG 2.1 AA Compliant (No alpha blurs, solid high-contrast borders and fills)
+ */
+
+/* Solid Surface Cards */
+.utsav-card {
+  background-color: var(--c-surface-card);
+  border: 1px solid var(--c-border);
+  border-radius: var(--rad-lg);
+  padding: var(--sp-6);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+
+.utsav-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-4);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--c-border);
+}
+
+.utsav-card-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--c-text);
+  margin: 0;
+}
+
+/* Status Chips & Badges */
+.utsav-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 0.125rem 0.625rem;
+  border-radius: var(--rad-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
+}
+
+.utsav-badge-critical {
+  background-color: var(--c-tier-critical-bg);
+  border-color: var(--c-tier-critical-border);
+  color: var(--c-tier-critical-text);
+}
+
+.utsav-badge-timeline {
+  background-color: var(--c-tier-timeline-bg);
+  border-color: var(--c-tier-timeline-border);
+  color: var(--c-tier-timeline-text);
+}
+
+.utsav-badge-vendor {
+  background-color: var(--c-tier-vendor-bg);
+  border-color: var(--c-tier-vendor-border);
+  color: var(--c-tier-vendor-text);
+}
+
+.utsav-badge-ontrack {
+  background-color: var(--c-tier-ontrack-bg);
+  border-color: var(--c-tier-ontrack-border);
+  color: var(--c-tier-ontrack-text);
+}
+
+/* Interactive Buttons */
+.utsav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: var(--rad-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.utsav-btn:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: 2px;
+}
+
+.utsav-btn-primary {
+  background-color: var(--c-primary);
+  color: var(--c-text-inverse);
+  border-color: var(--c-primary);
+}
+
+.utsav-btn-primary:hover {
+  background-color: var(--c-primary-hover);
+}
+
+.utsav-btn-secondary {
+  background-color: var(--c-surface);
+  color: var(--c-text);
+  border-color: var(--c-border-strong);
+}
+
+.utsav-btn-secondary:hover {
+  background-color: var(--c-surface-card-hover);
+}
+
+/* Simulator Controls & Sliders */
+.utsav-slider-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+.utsav-slider-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--c-text);
+}
+
+.utsav-slider {
+  width: 100%;
+  accent-color: var(--c-primary);
+  height: 6px;
+  background-color: var(--c-border-strong);
+  border-radius: var(--rad-full);
+  outline: none;
+  cursor: pointer;
+}
+
+/* Form Inputs & Textarea */
+.utsav-input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  background-color: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--rad-md);
+  color: var(--c-text);
+  font-size: 0.875rem;
+  font-family: var(--font-sans);
+}
+
+.utsav-input:focus {
+  outline: 2px solid var(--c-primary);
+  outline-offset: 1px;
+  border-color: var(--c-primary);
+}
+
+/* Metric / KPI Block */
+.utsav-metric {
+  padding: var(--sp-4);
+  background-color: var(--c-tonal-bg);
+  border: 1px solid var(--c-border);
+  border-radius: var(--rad-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.utsav-metric-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--c-text-muted);
+}
+
+.utsav-metric-val {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--c-text);
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,144 @@
+/**
+ * UtsavAI — 4-Region Solid-Surface Layout
+ * R1 (App Bar), R2 (Tab Bar), Dynamic Alert Banner, R3 (Page Header), R4 (12-Col Grid)
+ */
+
+/* Shell Container */
+.utsav-shell {
+  min-height: 100vh;
+  background-color: var(--c-canvas);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Region 1: App Bar */
+.utsav-r1-appbar {
+  background-color: var(--c-surface);
+  border-bottom: 1px solid var(--c-border);
+  height: 4rem;
+  padding: 0 var(--sp-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+/* Region 2: Navigation Tab Bar */
+.utsav-r2-tabbar {
+  background-color: var(--c-surface);
+  border-bottom: 1px solid var(--c-border);
+  padding: 0 var(--sp-6);
+  display: flex;
+  gap: var(--sp-4);
+  align-items: center;
+  position: sticky;
+  top: 4rem;
+  z-index: 30;
+}
+
+.utsav-tab-btn {
+  padding: var(--sp-3) var(--sp-4);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--c-text-muted);
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.utsav-tab-btn:hover {
+  color: var(--c-text);
+}
+
+.utsav-tab-btn[aria-selected="true"],
+.utsav-tab-btn.active {
+  color: var(--c-primary);
+  border-bottom-color: var(--c-primary);
+}
+
+/* Dynamic Alert Banner */
+.utsav-alert-banner {
+  padding: var(--sp-3) var(--sp-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--c-border);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.utsav-alert-banner.critical {
+  background-color: var(--c-tier-critical-bg);
+  border-color: var(--c-tier-critical-border);
+  color: var(--c-tier-critical-text);
+}
+
+.utsav-alert-banner.timeline {
+  background-color: var(--c-tier-timeline-bg);
+  border-color: var(--c-tier-timeline-border);
+  color: var(--c-tier-timeline-text);
+}
+
+.utsav-alert-banner.ontrack {
+  background-color: var(--c-tier-ontrack-bg);
+  border-color: var(--c-tier-ontrack-border);
+  color: var(--c-tier-ontrack-text);
+}
+
+/* Region 3: Page Header */
+.utsav-r3-header {
+  background-color: var(--c-surface);
+  border-bottom: 1px solid var(--c-border);
+  padding: var(--sp-6);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+
+/* Region 4: 12-Column Execution Grid */
+.utsav-r4-grid {
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
+  padding: var(--sp-6);
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--sp-6);
+  align-items: start;
+}
+
+.utsav-r4-main {
+  grid-column: span 12;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+.utsav-r4-sidebar {
+  grid-column: span 12;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+@media (min-width: 1024px) {
+  .utsav-r4-main {
+    grid-column: span 8;
+  }
+  
+  .utsav-r4-sidebar {
+    grid-column: span 4;
+    position: sticky;
+    top: 7.5rem;
+  }
+}

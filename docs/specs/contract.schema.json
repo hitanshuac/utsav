@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EventPlanInput",
+  "type": "object",
+  "required": [
+    "eventTitle",
+    "personaLens",
+    "guestCount",
+    "baseGuestCount",
+    "totalBudgetCap",
+    "daysRemaining",
+    "budgetItems",
+    "milestones"
+  ],
+  "properties": {
+    "eventTitle": {
+      "type": "string"
+    },
+    "personaLens": {
+      "type": "string",
+      "enum": ["family_host", "wedding_coordinator", "community_organizer"]
+    },
+    "guestCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "baseGuestCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "totalBudgetCap": {
+      "type": "number",
+      "minimum": 0
+    },
+    "daysRemaining": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "priorityVibe": {
+      "type": "string",
+      "enum": ["Experience First", "Budget Strict", "Balanced"]
+    },
+    "budgetItems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "category", "label", "allocatedAmount", "actualAmount", "isEstimate"],
+        "properties": {
+          "id": { "type": "string" },
+          "category": {
+            "type": "string",
+            "enum": ["venue", "catering", "decor", "photography", "logistics", "miscellaneous"]
+          },
+          "label": { "type": "string" },
+          "allocatedAmount": { "type": "number", "minimum": 0 },
+          "actualAmount": { "type": "number", "minimum": 0 },
+          "isEstimate": { "type": "boolean" },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "milestones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "deadlineDaysBeforeEvent", "category", "dependsOn", "status", "urgency"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "deadlineDaysBeforeEvent": { "type": "integer", "minimum": 0 },
+          "category": {
+            "type": "string",
+            "enum": ["venue", "catering", "decor", "photography", "logistics", "miscellaneous"]
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed"]
+          },
+          "urgency": {
+            "type": "string",
+            "enum": ["low", "medium", "critical"]
+          },
+          "leadTimeDays": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  }
+}

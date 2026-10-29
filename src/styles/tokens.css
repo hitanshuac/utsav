@@ -1,0 +1,89 @@
+/**
+ * UtsavAI — Design System Tokens
+ * Strict Solid-Surface Material 3 Architecture (Zero Alpha Blurs / Zero AI-Slop)
+ */
+
+:root {
+  /* Canvas & Solid Surfaces */
+  --c-canvas: #f8fafc;
+  --c-surface: #ffffff;
+  --c-surface-card: #ffffff;
+  --c-surface-card-hover: #f1f5f9;
+  --c-surface-alt: #f1f5f9;
+  --c-surface-muted: #e2e8f0;
+  --c-border: #e2e8f0;
+  --c-border-strong: #cbd5e1;
+  --c-tonal-bg: #f8fafc;
+
+  /* Text Colors (High Contrast, WCAG AA compliant >= 4.5:1) */
+  --c-text: #0f172a;
+  --c-text-body: #334155;
+  --c-text-muted: #64748b;
+  --c-text-subtle: #94a3b8;
+  --c-text-inverse: #ffffff;
+
+  /* Primary Brand (Utsav Warm Terracotta / Royal Saffron) */
+  --c-primary: #ea580c;
+  --c-primary-hover: #c2410c;
+  --c-primary-active: #9a3412;
+  --c-primary-tonal: #ffedd5;
+  --c-primary-text: #9a3412;
+
+  /* Secondary Brand (Deep Indigo / Coordinator Navy) */
+  --c-secondary: #3b82f6;
+  --c-secondary-hover: #2563eb;
+  --c-secondary-tonal: #dbeafe;
+  --c-secondary-text: #1e40af;
+
+  /* Semantic Triage Tiers (Indian Event Execution Bands) */
+  /* Tier 1: Critical Overrun */
+  --c-tier-critical: #dc2626;
+  --c-tier-critical-bg: #fef2f2;
+  --c-tier-critical-border: #fecaca;
+  --c-tier-critical-text: #991b1b;
+
+  /* Tier 2: Timeline Bottleneck */
+  --c-tier-timeline: #d97706;
+  --c-tier-timeline-bg: #fffbeb;
+  --c-tier-timeline-border: #fde68a;
+  --c-tier-timeline-text: #92400e;
+
+  /* Tier 3: Vendor Clarification Needed */
+  --c-tier-vendor: #4f46e5;
+  --c-tier-vendor-bg: #eef2ff;
+  --c-tier-vendor-border: #c7d2fe;
+  --c-tier-vendor-text: #3730a3;
+
+  /* Tier 4: On-Track Execution */
+  --c-tier-ontrack: #059669;
+  --c-tier-ontrack-bg: #ecfdf5;
+  --c-tier-ontrack-border: #a7f3d0;
+  --c-tier-ontrack-text: #065f46;
+
+  /* Typography */
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Spacing Scale */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.25rem;
+  --sp-6: 1.5rem;
+  --sp-8: 2rem;
+  --sp-10: 2.5rem;
+  --sp-12: 3rem;
+
+  /* Border Radius */
+  --rad-sm: 0.375rem;
+  --rad-md: 0.5rem;
+  --rad-lg: 0.75rem;
+  --rad-xl: 1rem;
+  --rad-full: 9999px;
+
+  /* Elevations (Solid drop shadows, no blur filters) */
+  --shadow-sm: 0 1px 2px 0 #0f172a0d;
+  --shadow-md: 0 4px 6px -1px #0f172a14, 0 2px 4px -2px #0f172a0f;
+  --shadow-lg: 0 10px 15px -3px #0f172a14, 0 4px 6px -4px #0f172a0f;
+}

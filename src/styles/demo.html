@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UtsavAI — 4-Region Solid-Surface Reference Shell</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="layout.css">
+  <link rel="stylesheet" href="components.css">
+</head>
+<body class="utsav-shell">
+  <!-- Region 1: Top App Bar -->
+  <header class="utsav-r1-appbar">
+    <div style="display: flex; align-items: center; gap: var(--sp-4);">
+      <strong style="font-size: 1.25rem; color: var(--c-primary);">UtsavAI</strong>
+      <span class="utsav-badge utsav-badge-ontrack">Evaluation Mode</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: var(--sp-4);">
+      <select class="utsav-input" style="width: auto;" aria-label="Persona Lens">
+        <option value="family_host">Family Host (₹8L Cap)</option>
+        <option value="wedding_coordinator">Wedding Coordinator</option>
+        <option value="community_organizer">Community Organizer</option>
+      </select>
+    </div>
+  </header>
+
+  <!-- Region 2: Navigation Tab Bar -->
+  <nav class="utsav-r2-tabbar" role="tablist" aria-label="Primary Navigation">
+    <button class="utsav-tab-btn active" role="tab" aria-selected="true">Overview</button>
+    <button class="utsav-tab-btn" role="tab" aria-selected="false">Budget & Trade-offs</button>
+    <button class="utsav-tab-btn" role="tab" aria-selected="false">Milestone DAG</button>
+    <button class="utsav-tab-btn" role="tab" aria-selected="false">Vendor Auditor</button>
+  </nav>
+
+  <!-- Top Dynamic Alert Banner -->
+  <div class="utsav-alert-banner critical">
+    <span>⚠️ <strong>Critical Overrun:</strong> Total allocated budget exceeds cap by ₹45,000.</span>
+    <button class="utsav-btn utsav-btn-primary" style="padding: 0.25rem 0.75rem; font-size: 0.75rem;">Resolve Trade-offs</button>
+  </div>
+
+  <!-- Region 3: Page Header -->
+  <section class="utsav-r3-header">
+    <div>
+      <h1 style="font-size: 1.5rem; margin: 0 0 0.25rem 0;">Sharma-Verma Grand Wedding</h1>
+      <p style="margin: 0; color: var(--c-text-muted); font-size: 0.875rem;">Target Date: 2026-11-20 · 200 Confirmed Guests</p>
+    </div>
+    <div style="display: flex; gap: var(--sp-3);">
+      <span class="utsav-badge utsav-badge-critical">Deficit: ₹45,000</span>
+      <button class="utsav-btn utsav-btn-secondary">Export .ics Calendar</button>
+    </div>
+  </section>
+
+  <!-- Region 4: 12-Column Execution Grid -->
+  <main class="utsav-r4-grid">
+    <!-- 8-Col Main Panel -->
+    <div class="utsav-r4-main">
+      <div class="utsav-card">
+        <div class="utsav-card-header">
+          <h2 class="utsav-card-title">Budget Allocation Ledger</h2>
+          <span class="utsav-badge utsav-badge-ontrack">Deterministic Math</span>
+        </div>
+        <p style="color: var(--c-text-body); font-size: 0.875rem;">
+          Exact category allocations scaled with variable headcount factors.
+        </p>
+      </div>
+
+      <div class="utsav-card">
+        <div class="utsav-card-header">
+          <h2 class="utsav-card-title">Milestone Dependency Graph (DAG)</h2>
+          <span class="utsav-badge utsav-badge-timeline">Critical Path</span>
+        </div>
+        <p style="color: var(--c-text-body); font-size: 0.875rem;">
+          Topologically sorted tasks ensuring prerequisites are met before execution.
+        </p>
+      </div>
+    </div>
+
+    <!-- 4-Col Simulator Sidebar -->
+    <aside class="utsav-r4-sidebar">
+      <div class="utsav-card">
+        <div class="utsav-card-header">
+          <h2 class="utsav-card-title">Mid-Flight What-If Simulator</h2>
+        </div>
+        <div class="utsav-slider-container">
+          <div class="utsav-slider-label">
+            <span>Guest Count</span>
+            <strong>200 Pax</strong>
+          </div>
+          <input type="range" min="50" max="600" value="200" class="utsav-slider" aria-label="Guest Count" />
+        </div>
+        <div class="utsav-slider-container">
+          <div class="utsav-slider-label">
+            <span>Total Budget Cap</span>
+            <strong>₹8,00,000</strong>
+          </div>
+          <input type="range" min="100000" max="2500000" step="10000" value="800000" class="utsav-slider" aria-label="Total Budget Cap" />
+        </div>
+        <div class="utsav-slider-container">
+          <div class="utsav-slider-label">
+            <span>Days to Event</span>
+            <strong>21 Days</strong>
+          </div>
+          <input type="range" min="1" max="180" value="21" class="utsav-slider" aria-label="Days Remaining" />
+        </div>
+      </div>
+    </aside>
+  </main>
+</body>
+</html>
