@@ -1,5 +1,5 @@
 import type { FC } from "react";
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   AlertCircle,
   MessageSquare,
@@ -54,12 +54,17 @@ interface MainPanelProps {
   sampleVendorNote: string;
   filterQuery: string;
   onClearFilter?: () => void;
+  onSearchChange?: (query: string) => void;
   daysRemaining?: number;
   eventTitle?: string;
   onActionTriggered?: (actionName: string, explanation: string, deltas?: any[]) => void;
   persona?: PersonaLens;
   language?: SupportedLanguage;
   onTabChange?: (tab: TopicTabId) => void;
+  onConsultAiTradeoffs?: () => void;
+  isRebalancing?: boolean;
+  aiNarrative?: string | null;
+  aiProvenance?: "ai" | "fallback";
 }
 
 export const MainPanel: FC<MainPanelProps> = ({
@@ -87,12 +92,17 @@ export const MainPanel: FC<MainPanelProps> = ({
   sampleVendorNote,
   filterQuery,
   onClearFilter,
+  onSearchChange,
   daysRemaining = 30,
   eventTitle = "Celebration",
   onActionTriggered,
   persona = "family_host",
   language = "en",
-  onTabChange
+  onTabChange,
+  onConsultAiTradeoffs,
+  isRebalancing = false,
+  aiNarrative,
+  aiProvenance = "fallback"
 }) => {
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
 
@@ -126,10 +136,80 @@ export const MainPanel: FC<MainPanelProps> = ({
   const [vendorAudit, setVendorAudit] = useState<VendorAuditResult>(
     auditVendorQuoteOffline(sampleVendorNote)
   );
+  const [isAuditing, setIsAuditing] = useState<boolean>(false);
+  const [auditProvenance, setAuditProvenance] = useState<"ai" | "fallback">("fallback");
 
-  const handleAudit = () => {
+  useEffect(() => {
+    setVendorNote(sampleVendorNote);
+    setVendorAudit(auditVendorQuoteOffline(sampleVendorNote));
+    setAuditProvenance("fallback");
+  }, [sampleVendorNote]);
+
+  const handleAudit = async () => {
+    setIsAuditing(true);
+    try {
+      const res = await fetch("/api/audit-vendor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vendorNote })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const result: VendorAuditResult = {
+          vendorName: data.vendorName || "Audited Vendor",
+          quotedAmount: Number(data.quotedAmount) || 0,
+          detectedInclusions: data.detectedInclusions || data.inclusions || [],
+          inclusions: data.inclusions || data.detectedInclusions || [],
+          flaggedHiddenCosts: data.flaggedHiddenCosts || data.hiddenCostRisks || [],
+          hiddenCostRisks: data.hiddenCostRisks || data.flaggedHiddenCosts || [],
+          negotiationQuestions: data.negotiationQuestions || [],
+          provenance: data.provenance === "ai" ? "ai" : "fallback"
+        };
+        setVendorAudit(result);
+        const prov = data.provenance === "ai" ? "ai" : "fallback";
+        setAuditProvenance(prov);
+        logActivityEvent({
+          taskId: "vendor-audit",
+          taskTitle: `Audited Vendor Quote: ${result.vendorName}`,
+          category: "venue",
+          channel: "system",
+          vendorName: result.vendorName,
+          recipient: "Procurement Ops",
+          summary: `Audited ₹${result.quotedAmount.toLocaleString("en-IN")} quote (${prov === "ai" ? "Live Gemini 3.5 AI" : "Deterministic Fallback"}). Detected ${result.flaggedHiddenCosts.length} potential hidden cost risk(s).`,
+          loopStatus: "closed"
+        });
+        if (onActionTriggered) {
+          onActionTriggered(
+            `Audited Vendor Quote: ${result.vendorName}`,
+            `${prov === "ai" ? "Live Gemini 3.5 AI" : "Deterministic"} quote audit identified ₹${result.quotedAmount.toLocaleString("en-IN")} base amount with ${result.flaggedHiddenCosts.length} flagged risk items.`,
+            [
+              {
+                label: "Detected Base Amount",
+                before: "—",
+                after: `₹${result.quotedAmount.toLocaleString("en-IN")}`,
+                diff: "Audited"
+              },
+              {
+                label: "Flagged Hidden Costs",
+                before: "0",
+                after: `${result.flaggedHiddenCosts.length} items`,
+                diff: result.flaggedHiddenCosts.length > 0 ? "Risks Flagged" : "Clear",
+                isImprovement: result.flaggedHiddenCosts.length === 0
+              }
+            ]
+          );
+        }
+        return;
+      }
+    } catch {
+      // offline fallback
+    } finally {
+      setIsAuditing(false);
+    }
+
     const result = auditVendorQuoteOffline(vendorNote);
     setVendorAudit(result);
+    setAuditProvenance("fallback");
     logActivityEvent({
       taskId: "vendor-audit",
       taskTitle: `Audited Vendor Quote: ${result.vendorName}`,
@@ -137,7 +217,7 @@ export const MainPanel: FC<MainPanelProps> = ({
       channel: "system",
       vendorName: result.vendorName,
       recipient: "Coordinator Ops",
-      summary: `Audited ₹${result.quotedAmount.toLocaleString("en-IN")} quote. Detected ${result.flaggedHiddenCosts.length} potential hidden cost risk(s).`,
+      summary: `Audited ₹${result.quotedAmount.toLocaleString("en-IN")} quote (Deterministic Shield). Detected ${result.flaggedHiddenCosts.length} potential hidden cost risk(s).`,
       loopStatus: "closed"
     });
     if (onActionTriggered) {
@@ -183,6 +263,27 @@ export const MainPanel: FC<MainPanelProps> = ({
 
   const matchingCount = query ? filteredBudget.length + filteredMilestones.length : 0;
 
+  // Persona-adaptive budget sorting
+  const sortedBudget: BudgetItem[] = useMemo(() => {
+    const items = [...filteredBudget];
+    if (persona === "family_host") {
+      // Host: Catering & Venue at the top (hospitality essentials)
+      const priority: Record<string, number> = { catering: 1, venue: 2, decor: 3, photography: 4, logistics: 5, miscellaneous: 6 };
+      return items.sort((a, b) => (priority[a.category] || 99) - (priority[b.category] || 99));
+    } else if (persona === "wedding_coordinator") {
+      // Coordinator: Unverified estimates first, then highest allocated contracts
+      return items.sort((a, b) => {
+        if (a.isEstimate !== b.isEstimate) return a.isEstimate ? -1 : 1;
+        return b.allocatedAmount - a.allocatedAmount;
+      });
+    } else if (persona === "community_organizer") {
+      // Organizer: Logistics (power/sound/sanitation) & Venue (ground permits) first
+      const priority: Record<string, number> = { logistics: 1, venue: 2, catering: 3, decor: 4, photography: 5, miscellaneous: 6 };
+      return items.sort((a, b) => (priority[a.category] || 99) - (priority[b.category] || 99));
+    }
+    return items;
+  }, [filteredBudget, persona]);
+
   // Distinct workspace modes to prevent double rendering between Step 1 & Step 2
   const showOverview = activeTab === "overview";
   const showBudget = activeTab === "budget";
@@ -217,31 +318,134 @@ export const MainPanel: FC<MainPanelProps> = ({
         </div>
       )}
 
-      {/* PROMINENT ROLE LENS BANNER (TAILORED OPERATIONAL FOCUS) */}
-      <div className="bg-white border border-slate-200 rounded-xl p-3 mb-4 shadow-xs flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 flex items-center justify-center shrink-0">
-            <UserCheck className="w-4 h-4 text-indigo-700" aria-hidden="true" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <strong className="text-xs font-bold text-slate-900">
-                {persona === "family_host"
-                  ? "Viewing As: Family Host"
-                  : persona === "wedding_coordinator"
-                  ? "Viewing As: Wedding Coordinator"
-                  : "Viewing As: Community Organizer"}
-              </strong>
+      {/* PROMINENT ROLE LENS BANNER (DYNAMICALLY ADAPTED DASHBOARD) */}
+      <div className="bg-white border border-slate-200 rounded-xl p-3.5 mb-4 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-200 flex items-center justify-center shrink-0 mt-0.5">
+              <UserCheck className="w-5 h-5 text-indigo-700" aria-hidden="true" />
             </div>
-            <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
-              {persona === "family_host" &&
-                `Focus: Food quality & per-plate costs (₹${cateringPerPlate.toLocaleString("en-IN")}/plate for ${guestCount} guests). Protects the feast meal; trims aesthetic decor first if budget overruns.`}
-              {persona === "wedding_coordinator" &&
-                `Focus: Milestone deadlines & vendor contracts. Enforces timeline prerequisites and flags missing 18% GST or unverified quotes.`}
-              {persona === "community_organizer" &&
-                `Focus: Municipal NOCs & crowd safety. Prioritizes Fire Safety permits (T-40d), stage permissions, and volunteer assignments for ${guestCount} attendees.`}
-            </p>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <strong className="text-xs font-bold text-slate-900">
+                  {persona === "family_host" && "Viewing As: Family Host (Hospitality & Feast Protection Lens)"}
+                  {persona === "wedding_coordinator" && "Viewing As: Wedding Coordinator (Contractual SLA & Critical Path Lens)"}
+                  {persona === "community_organizer" && "Viewing As: Community Organizer (Civic Permits & Mass Safety Lens)"}
+                </strong>
+                <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800">
+                  Active Persona
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                {persona === "family_host" &&
+                  `Focus: Food quality & per-plate costs (₹${cateringPerPlate.toLocaleString("en-IN")}/plate for ${guestCount} guests). Protects the feast meal; trims aesthetic decor or miscellaneous buffers first if budget overruns.`}
+                {persona === "wedding_coordinator" &&
+                  `Focus: Milestone deadlines & vendor contracts. Enforces timeline prerequisites and flags missing 18% GST or unverified quotes.`}
+                {persona === "community_organizer" &&
+                  `Focus: Municipal NOCs & crowd safety. Prioritizes Fire Safety permits (T-40d), stage permissions, and volunteer assignments for ${guestCount} attendees.`}
+              </p>
+            </div>
           </div>
+        </div>
+
+        {/* Dynamic Role Quick Action Pills */}
+        <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center gap-2 flex-wrap text-xs">
+          <span className="text-[10px] uppercase font-mono font-bold text-slate-400">Role Shortcuts:</span>
+          {persona === "family_host" && (
+            <>
+              <button
+                type="button"
+                onClick={() => onSearchChange?.("catering")}
+                className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 cursor-pointer transition-colors"
+              >
+                🍲 Focus: Feast &amp; Catering
+              </button>
+              <button
+                type="button"
+                onClick={() => onSearchChange?.("venue")}
+                className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 cursor-pointer transition-colors"
+              >
+                🏰 Focus: Venue &amp; Hospitality
+              </button>
+              {onTabChange && (
+                <button
+                  type="button"
+                  onClick={() => onTabChange("budget")}
+                  className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 cursor-pointer transition-colors"
+                >
+                  ✨ Protect Feast in Trade-Offs →
+                </button>
+              )}
+            </>
+          )}
+
+          {persona === "wedding_coordinator" && (
+            <>
+              <button
+                type="button"
+                onClick={() => onSearchChange?.("estimate")}
+                className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-900 cursor-pointer transition-colors"
+              >
+                ⚡ Focus: Unverified Quotes
+              </button>
+              {onTabChange && (
+                <button
+                  type="button"
+                  onClick={() => onTabChange("vendor")}
+                  className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-indigo-50 hover:bg-indigo-100 border border-indigo-300 text-indigo-900 cursor-pointer transition-colors"
+                >
+                  📜 Audit Vendor Quotes (18% GST) →
+                </button>
+              )}
+              {onTabChange && (
+                <button
+                  type="button"
+                  onClick={() => onTabChange("overview")}
+                  className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 cursor-pointer transition-colors"
+                >
+                  ⏱️ Review Critical Path SLAs →
+                </button>
+              )}
+            </>
+          )}
+
+          {persona === "community_organizer" && (
+            <>
+              <button
+                type="button"
+                onClick={() => onSearchChange?.("logistics")}
+                className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 cursor-pointer transition-colors"
+              >
+                🏛️ Focus: Logistics &amp; Power
+              </button>
+              <button
+                type="button"
+                onClick={() => onSearchChange?.("permit")}
+                className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 cursor-pointer transition-colors"
+              >
+                📢 Municipal NOC &amp; Fire Safety
+              </button>
+              {onTabChange && (
+                <button
+                  type="button"
+                  onClick={() => onTabChange("overview")}
+                  className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 cursor-pointer transition-colors"
+                >
+                  👥 Volunteer Roster Milestones →
+                </button>
+              )}
+            </>
+          )}
+
+          {query && onClearFilter && (
+            <button
+              type="button"
+              onClick={onClearFilter}
+              className="text-[11px] font-semibold text-rose-700 hover:underline cursor-pointer ml-auto"
+            >
+              [Clear Filter]
+            </button>
+          )}
         </div>
       </div>
 
@@ -258,6 +462,7 @@ export const MainPanel: FC<MainPanelProps> = ({
             onUpdateTaskStatus={onUpdateTaskStatus}
             onActionTriggered={onActionTriggered}
             language={language}
+            persona={persona}
           />
 
           {/* Executive Summary Card on Step 1 (Replaces duplicated budget cards) */}
@@ -287,37 +492,96 @@ export const MainPanel: FC<MainPanelProps> = ({
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
-                  <span className="text-slate-500 text-[11px] block">Budget Ceiling</span>
-                  <strong className="text-slate-900 font-bold font-mono text-sm">
-                    ₹{totalBudgetCap.toLocaleString("en-IN")}
-                  </strong>
-                </div>
+                {persona === "family_host" && (
+                  <>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                      <span className="text-slate-500 text-[11px] block">Confirmed Guests</span>
+                      <strong className="text-slate-900 font-bold font-mono text-sm">
+                        {guestCount} Pax ({(guestCount / baseGuestCount).toFixed(2)}x)
+                      </strong>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                      <span className="text-slate-500 text-[11px] block">Feast Cost / Plate</span>
+                      <strong className="text-emerald-700 font-bold font-mono text-sm">
+                        ₹{cateringPerPlate.toLocaleString("en-IN")}/plate
+                      </strong>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                      <span className="text-slate-500 text-[11px] block">Hospitality Milestones</span>
+                      <strong className="text-slate-900 font-bold font-mono text-sm">
+                        {milestones.filter((m) => (m.category === "catering" || m.category === "venue") && m.status === "completed").length} / {milestones.filter((m) => m.category === "catering" || m.category === "venue").length} Locked
+                      </strong>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                      <span className="text-slate-500 text-[11px] block">Muhurat Feast Buffer</span>
+                      <strong className="text-emerald-600 font-bold font-mono text-sm">
+                        Protected (Catering on track)
+                      </strong>
+                    </div>
+                  </>
+                )}
 
-                <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
-                  <span className="text-slate-500 text-[11px] block">Allocated Total</span>
-                  <strong className="text-slate-900 font-bold font-mono text-sm">
-                    ₹{totalAllocated.toLocaleString("en-IN")}
-                  </strong>
-                </div>
+                {persona === "wedding_coordinator" && (
+                  <>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                      <span className="text-slate-500 text-[11px] block">Budget Ceiling</span>
+                      <strong className="text-slate-900 font-bold font-mono text-sm">
+                        ₹{totalBudgetCap.toLocaleString("en-IN")}
+                      </strong>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                      <span className="text-slate-500 text-[11px] block">Unverified Estimates</span>
+                      <strong className="text-amber-700 font-bold font-mono text-sm">
+                        {budgetItems.filter((b) => b.isEstimate).length} Quotes Pending
+                      </strong>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                      <span className="text-slate-500 text-[11px] block">Critical Path Bottlenecks</span>
+                      <strong
+                        className={`font-bold font-mono text-sm ${
+                          bottlenecks.length > 0 ? "text-red-600" : "text-emerald-600"
+                        }`}
+                      >
+                        {bottlenecks.length > 0 ? `${bottlenecks.length} Blocked` : "All Clear"}
+                      </strong>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                      <span className="text-slate-500 text-[11px] block">Lead Time Deficits</span>
+                      <strong className="text-indigo-700 font-bold font-mono text-sm">
+                        {milestones.filter((m) => (m.leadTimeDays || m.deadlineDaysBeforeEvent) > daysRemaining && m.status !== "completed").length} Tasks Due
+                      </strong>
+                    </div>
+                  </>
+                )}
 
-                <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
-                  <span className="text-slate-500 text-[11px] block">Milestone Progress</span>
-                  <strong className="text-emerald-700 font-bold font-mono text-sm">
-                    {completedMilestones} / {milestones.length} Completed
-                  </strong>
-                </div>
-
-                <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
-                  <span className="text-slate-500 text-[11px] block">Critical Bottlenecks</span>
-                  <strong
-                    className={`font-bold font-mono text-sm ${
-                      bottlenecks.length > 0 ? "text-red-600" : "text-emerald-600"
-                    }`}
-                  >
-                    {bottlenecks.length > 0 ? `${bottlenecks.length} Blocked` : "All Clear"}
-                  </strong>
-                </div>
+                {persona === "community_organizer" && (
+                  <>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                      <span className="text-slate-500 text-[11px] block">Mass Headcount</span>
+                      <strong className="text-slate-900 font-bold font-mono text-sm">
+                        {guestCount} Expected Attendees
+                      </strong>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                      <span className="text-slate-500 text-[11px] block">Civic Permits &amp; NOC</span>
+                      <strong className="text-emerald-700 font-bold font-mono text-sm">
+                        {milestones.filter((m) => m.title.toLowerCase().includes("permit") || m.title.toLowerCase().includes("noc") || m.title.toLowerCase().includes("safety")).every((m) => m.status === "completed") ? "All Cleared" : "Action Needed"}
+                      </strong>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                      <span className="text-slate-500 text-[11px] block">Power &amp; Sound Grid</span>
+                      <strong className="text-slate-900 font-bold font-mono text-sm">
+                        {budgetItems.find((b) => b.category === "logistics")?.allocatedAmount ? `₹${budgetItems.find((b) => b.category === "logistics")!.allocatedAmount.toLocaleString("en-IN")}` : "Allocated"}
+                      </strong>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                      <span className="text-slate-500 text-[11px] block">Logistics Tasks</span>
+                      <strong className="text-indigo-700 font-bold font-mono text-sm">
+                        {milestones.filter((m) => m.category === "logistics").length} Crew Milestones
+                      </strong>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -358,7 +622,7 @@ export const MainPanel: FC<MainPanelProps> = ({
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 mb-5">
-            {filteredBudget.map((item) => {
+            {sortedBudget.map((item: BudgetItem) => {
               const scaledCat = scaledCategories.find((s) => s.category === item.category);
               const perPlate =
                 item.category === "catering" && guestCount > 0
@@ -382,11 +646,43 @@ export const MainPanel: FC<MainPanelProps> = ({
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {isCardCritical && (
                           <span className="critical-pulse-dot shrink-0" aria-hidden="true" />
                         )}
                         <span className="text-xs font-bold text-slate-900">{item.label}</span>
+
+                        {/* Dynamic Role Lens Tag */}
+                        {persona === "family_host" && item.category === "catering" && (
+                          <span className="utsav-badge utsav-badge-ontrack text-[10px]">
+                            👑 Hospitality Focus
+                          </span>
+                        )}
+                        {persona === "family_host" && item.category === "venue" && (
+                          <span className="utsav-badge utsav-badge-vendor text-[10px]">
+                            👑 Host Essential
+                          </span>
+                        )}
+                        {persona === "wedding_coordinator" && item.isEstimate && (
+                          <span className="utsav-badge utsav-badge-timeline text-[10px]">
+                            ⚡ SLA Check · Unverified
+                          </span>
+                        )}
+                        {persona === "wedding_coordinator" && !item.isEstimate && item.allocatedAmount > totalBudgetCap * 0.25 && (
+                          <span className="utsav-badge utsav-badge-vendor text-[10px]">
+                            ⚡ Major Contract
+                          </span>
+                        )}
+                        {persona === "community_organizer" && item.category === "logistics" && (
+                          <span className="utsav-badge utsav-badge-critical text-[10px]">
+                            🛡️ Public Safety Mandate
+                          </span>
+                        )}
+                        {persona === "community_organizer" && item.category === "venue" && (
+                          <span className="utsav-badge utsav-badge-vendor text-[10px]">
+                            🛡️ Municipal Ground NOC
+                          </span>
+                        )}
                       </div>
                       <span className="text-[11px] font-mono uppercase text-slate-500">
                         {item.category} · {scaledCat?.isVariable ? t.scalesWithGuests : t.fixedContract}
@@ -549,14 +845,51 @@ export const MainPanel: FC<MainPanelProps> = ({
               {/* OPTION 2: COST-CUTTING TRADE-OFF STRATEGIES */}
               {tradeoffs.length > 0 && (
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">
-                      Option 2: Rebalance Expenses via Category Trade-Offs
-                    </span>
-                    <span className="text-[10px] text-slate-500">
-                      {tradeoffs.length} Strategies Available
-                    </span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+                        Option 2: Rebalance Expenses via Category Trade-Offs
+                      </span>
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
+                          aiProvenance === "ai"
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                            : "bg-slate-100 text-slate-600 border-slate-200"
+                        }`}
+                      >
+                        {aiProvenance === "ai"
+                          ? "✨ Gemini 3.5 Live AI Proposal"
+                          : "🛡️ Deterministic Heuristic"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {onConsultAiTradeoffs && (
+                        <button
+                          type="button"
+                          onClick={onConsultAiTradeoffs}
+                          disabled={isRebalancing}
+                          className="utsav-btn bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] px-3 py-1 font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-60 shadow-xs"
+                        >
+                          <Sparkles className="w-3 h-3 text-indigo-200" aria-hidden="true" />
+                          <span>{isRebalancing ? "Consulting Gemini 3.5..." : "✨ Consult Gemini 3.5 AI"}</span>
+                        </button>
+                      )}
+                      <span className="text-[10px] text-slate-500">
+                        {tradeoffs.length} Strategies Available
+                      </span>
+                    </div>
                   </div>
+
+                  {aiNarrative && (
+                    <div className="bg-indigo-50 border border-indigo-200 text-indigo-950 rounded-lg p-3 mb-2.5 shadow-xs text-xs">
+                      <div className="flex items-center gap-1.5 font-bold text-indigo-900 mb-1">
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-600" aria-hidden="true" />
+                        <span>Gemini 3.5 Strategic Recommendation</span>
+                      </div>
+                      <SafeNarrative content={aiNarrative} className="text-xs leading-relaxed text-indigo-900" />
+                    </div>
+                  )}
 
                   <div className="flex flex-col gap-2.5">
                     {tradeoffs.map((strategy, idx) => (
@@ -565,9 +898,28 @@ export const MainPanel: FC<MainPanelProps> = ({
                         className="bg-white border border-rose-200 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-rose-300 transition-colors shadow-xs"
                       >
                         <div>
-                          <strong className="text-xs font-bold text-slate-900 block mb-0.5">
-                            {strategy.strategyTitle}
-                          </strong>
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <strong className="text-xs font-bold text-slate-900">
+                              {strategy.strategyTitle}
+                            </strong>
+
+                            {/* Dynamic Role Recommendation Badges */}
+                            {idx === 0 && persona === "family_host" && (
+                              <span className="utsav-badge utsav-badge-ontrack text-[10px] font-bold">
+                                ★ Recommended for Family Host (Safeguards Feast &amp; Guest Comfort)
+                              </span>
+                            )}
+                            {idx === 1 && persona === "wedding_coordinator" && (
+                              <span className="utsav-badge utsav-badge-vendor text-[10px] font-bold">
+                                ★ Recommended for Wedding Coordinator (Strict Contract &amp; Cost Control)
+                              </span>
+                            )}
+                            {idx === 2 && persona === "community_organizer" && (
+                              <span className="utsav-badge utsav-badge-timeline text-[10px] font-bold">
+                                ★ Recommended for Community Organizer (Preserves Mass Gathering Safety)
+                              </span>
+                            )}
+                          </div>
                           <SafeNarrative content={strategy.description} className="text-[11px] text-slate-600 mb-1" />
                           <div className="flex flex-wrap gap-1.5">
                             {strategy.adjustments.map((adj, aIdx) => (
@@ -701,9 +1053,11 @@ export const MainPanel: FC<MainPanelProps> = ({
               <button
                 type="button"
                 onClick={handleAudit}
-                className="utsav-btn utsav-btn-primary text-xs px-3.5 py-1.5 font-semibold cursor-pointer"
+                disabled={isAuditing}
+                className="utsav-btn utsav-btn-primary text-xs px-3.5 py-1.5 font-semibold cursor-pointer disabled:opacity-60 flex items-center gap-1.5"
               >
-                Audit Vendor Note
+                {isAuditing && <Sparkles className="w-3 h-3 text-amber-300 animate-spin" aria-hidden="true" />}
+                <span>{isAuditing ? "Auditing with Gemini 3.5..." : "Audit Vendor Note"}</span>
               </button>
             </div>
           </div>
@@ -712,7 +1066,7 @@ export const MainPanel: FC<MainPanelProps> = ({
           <div
             className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-xs"
             aria-live="polite"
-            aria-busy="false"
+            aria-busy={isAuditing}
           >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3 mb-3">
               <div>
@@ -726,8 +1080,14 @@ export const MainPanel: FC<MainPanelProps> = ({
                   </strong>
                 </span>
               </div>
-              <span className="utsav-badge utsav-badge-ontrack text-[10px]">
-                Deterministic Guard Active
+              <span
+                className={`utsav-badge text-[10px] font-semibold border ${
+                  auditProvenance === "ai"
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                    : "utsav-badge-ontrack"
+                }`}
+              >
+                {auditProvenance === "ai" ? "✨ Gemini 3.5 Live AI Audit" : "🛡️ Deterministic Guard Active"}
               </span>
             </div>
 

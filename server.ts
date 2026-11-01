@@ -1,4 +1,12 @@
-import "dotenv/config";
+// Safely load .env in local development without crashing if .env is missing in serverless containers
+if (!process.env.VERCEL) {
+  try {
+    const { config } = await import("dotenv");
+    config();
+  } catch {
+    // .env is optional; Vercel injects environment variables natively
+  }
+}
 import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import fs from "fs";
@@ -18,7 +26,16 @@ const __dirname = path.dirname(__filename);
 // In-memory sliding window rate limiter (15 requests/minute per IP)
 const requestRateMap = new Map<string, number[]>();
 function rateLimiter(req: Request, res: Response, next: NextFunction) {
-  const ip = req.ip || req.socket.remoteAddress || "127.0.0.1";
+  const forwarded = req.headers["x-forwarded-for"];
+  const ip =
+    (typeof forwarded === "string"
+      ? forwarded.split(",")[0]?.trim()
+      : Array.isArray(forwarded)
+      ? forwarded[0]
+      : null) ||
+    req.ip ||
+    req.socket?.remoteAddress ||
+    "127.0.0.1";
   const now = Date.now();
   const windowMs = 60 * 1000;
   const maxRequests = 15;
@@ -266,7 +283,8 @@ Return strictly valid JSON with the format:
           narrative: parsed.narrative || getRoleTailoredNarrative(planInput.personaLens || "family_host", deficit),
           provenance: "ai"
         });
-      } catch {
+      } catch (llmErr) {
+        console.warn("[/api/rebalance LLM failure]:", llmErr instanceof Error ? llmErr.message : llmErr);
         // Graceful circuit-breaker fallback
         const fallbackStrategies = generateDeterministicTradeoffs(
           deficit,
@@ -359,7 +377,8 @@ Return strictly valid JSON:
           negotiationQuestions,
           provenance: "ai"
         });
-      } catch {
+      } catch (llmErr) {
+        console.warn("[/api/audit-vendor LLM failure]:", llmErr instanceof Error ? llmErr.message : llmErr);
         const fallbackAudit = auditVendorQuoteOffline(sanitizedNote);
         res.json({
           ...fallbackAudit,
@@ -386,6 +405,15 @@ Return strictly valid JSON:
     }
   });
 
+  // Vercel Serverless URL Normalization:
+  // When Vercel rewrites /api/(.*) to /api/index, req.originalUrl preserves the public route
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    if (req.originalUrl && req.url !== req.originalUrl) {
+      req.url = req.originalUrl;
+    }
+    next();
+  });
+
   return app;
 }
 
@@ -393,6 +421,9 @@ const app = createApp();
 const PORT = Number(process.env.APP_PORT || process.env.PORT) || 3000;
 
 export async function startServer() {
+  if (process.env.VERCEL === "1") {
+    return app;
+  }
   const distPath = path.join(__dirname, "dist");
   const distAssetsPath = path.join(distPath, "assets");
   if (process.env.NODE_ENV === "production" && fs.existsSync(distAssetsPath)) {
@@ -400,7 +431,8 @@ export async function startServer() {
   }
 
   if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
+    const vitePkg = "vite";
+    const { createServer: createViteServer } = await import(/* @vite-ignore */ vitePkg);
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa"

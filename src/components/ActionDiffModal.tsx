@@ -1,5 +1,5 @@
-import React, { useEffect } from "react";
-import { CheckCircle, AlertTriangle, ArrowRight, X, Clock, FileText } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { CheckCircle, X, FileText } from "lucide-react";
 import { PlanningTriageTier } from "../types/planner";
 import { SafeNarrative } from "./SafeNarrative";
 
@@ -44,6 +44,18 @@ export const ActionDiffModal: React.FC<ActionDiffModalProps> = ({
   onClose,
   onViewActivityLog
 }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  // Auto-dismiss after 8 seconds unless hovered
+  useEffect(() => {
+    if (!isOpen || !diff || isHovered) return;
+    const timer = setTimeout(() => {
+      onClose();
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [isOpen, diff, isHovered, onClose]);
+
+  // Escape key support
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isOpen) {
@@ -61,163 +73,149 @@ export const ActionDiffModal: React.FC<ActionDiffModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900 bg-opacity-70 animate-fade-in"
-      role="dialog"
-      aria-modal="true"
+      className="fixed bottom-5 right-5 z-50 max-w-md w-[calc(100vw-2.5rem)] bg-white border-2 border-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+      role="status"
+      aria-live="polite"
       aria-labelledby="action-diff-title"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center">
-              <FileText className="w-4 h-4" aria-hidden="true" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 id="action-diff-title" className="text-sm font-bold text-slate-900">
-                  {diff.actionName}
-                </h2>
-                <span className="text-[10px] font-mono bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">
-                  {diff.timestamp}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">{diff.title}</p>
-            </div>
+      {/* Header */}
+      <div className="bg-slate-100 border-b border-slate-200 px-4 py-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-7 h-7 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+            <FileText className="w-4 h-4" aria-hidden="true" />
           </div>
+          <div className="min-w-0">
+            <h3 id="action-diff-title" className="text-xs font-bold text-slate-900 truncate">
+              {diff.actionName}
+            </h3>
+            <p className="text-[11px] text-slate-500 truncate">{diff.title}</p>
+          </div>
+        </div>
 
+        <div className="flex items-center gap-2 shrink-0">
+          <span
+            className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase font-mono ${
+              isScoreImproved
+                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                : "bg-amber-100 text-amber-800 border-amber-300"
+            }`}
+          >
+            Urgency {scoreDiff > 0 ? `+${scoreDiff}` : scoreDiff} pts
+          </span>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
-            aria-label="Close modification popup"
+            className="text-slate-400 hover:text-slate-700 p-1 rounded-md hover:bg-slate-200 transition-colors"
+            aria-label="Close notification"
           >
             <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
+      </div>
 
-        {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-5">
-          {/* Triage Health Shift Banner */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-600">Triage Status Shift:</span>
-              <span
-                className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase font-mono ${
-                  TIER_BADGE_STYLES[diff.beforeTier]
-                }`}
-              >
-                {diff.beforeTier.replace("_", " ")} ({diff.beforeScore}/100)
-              </span>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
-              <span
-                className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase font-mono ${
-                  TIER_BADGE_STYLES[diff.afterTier]
-                }`}
-              >
-                {diff.afterTier.replace("_", " ")} ({diff.afterScore}/100)
-              </span>
-            </div>
-
-            <div className="text-xs font-mono font-semibold">
-              <span className={isScoreImproved ? "text-emerald-700" : "text-amber-700"}>
-                Urgency {scoreDiff > 0 ? `+${scoreDiff}` : scoreDiff} pts
-              </span>
-            </div>
+      {/* Body */}
+      <div className="p-3.5 space-y-2.5 max-h-[60vh] overflow-y-auto">
+        {/* Triage Tier Badge Shift if changed */}
+        {diff.beforeTier !== diff.afterTier && (
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <span className="text-slate-500 font-medium">Status:</span>
+            <span
+              className={`px-1.5 py-0.5 rounded font-mono font-bold text-[10px] border uppercase ${
+                TIER_BADGE_STYLES[diff.beforeTier]
+              }`}
+            >
+              {diff.beforeTier.replace("_", " ")}
+            </span>
+            <span className="text-slate-400">→</span>
+            <span
+              className={`px-1.5 py-0.5 rounded font-mono font-bold text-[10px] border uppercase ${
+                TIER_BADGE_STYLES[diff.afterTier]
+              }`}
+            >
+              {diff.afterTier.replace("_", " ")}
+            </span>
           </div>
+        )}
 
-          {/* Before -> After Diff Table */}
-          <div>
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
-              Before → After Modification Ledger
-            </h3>
-            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200">
-                    <th className="py-2.5 px-3">Metric / Item</th>
-                    <th className="py-2.5 px-3">Baseline</th>
-                    <th className="py-2.5 px-3">Modified Value</th>
-                    <th className="py-2.5 px-3 text-right">Net Impact</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {diff.deltas.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-2 px-3 font-medium text-slate-800">{row.label}</td>
-                      <td className="py-2 px-3 font-mono text-slate-500 tabular-nums">{row.before}</td>
-                      <td className="py-2 px-3 font-mono font-semibold text-slate-900 tabular-nums">
-                        {row.after}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono font-bold tabular-nums">
-                        {row.diff ? (
-                          <span
-                            className={
-                              row.isImprovement === true
-                                ? "text-emerald-700"
-                                : row.isImprovement === false
-                                ? "text-rose-600"
-                                : "text-slate-600"
-                            }
-                          >
-                            {row.diff}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Why This Happened Explanation */}
-          <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-4">
-            <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-              <CheckCircle className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />
-              <span>Deterministic Rule & Impact Rationale</span>
-            </h4>
-            <SafeNarrative
-              content={diff.explanation}
-              className="text-xs text-slate-700 leading-relaxed"
-            />
-            {diff.recommendedNextStep && (
-              <div className="mt-2.5 pt-2 border-t border-amber-200/60 text-xs text-amber-800 font-medium">
-                <strong>Recommended Next Step:</strong> {diff.recommendedNextStep}
+        {/* Compact Before -> After Summary Lines */}
+        {diff.deltas.length > 0 && (
+          <div className="space-y-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs">
+            {diff.deltas.slice(0, 4).map((row, idx) => (
+              <div key={idx} className="flex items-center justify-between gap-2">
+                <span className="font-medium text-slate-700 truncate">{row.label}:</span>
+                <div className="flex items-center gap-1.5 shrink-0 font-mono text-[11px]">
+                  <span className="text-slate-400 line-through">{row.before}</span>
+                  <span className="text-slate-400">→</span>
+                  <span className="font-bold text-slate-900">{row.after}</span>
+                  {row.diff && (
+                    <span
+                      className={`px-1.5 py-0.5 rounded font-semibold text-[10px] ${
+                        row.isImprovement === true
+                          ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                          : row.isImprovement === false
+                          ? "bg-rose-100 text-rose-800 border border-rose-200"
+                          : "bg-slate-200 text-slate-700"
+                      }`}
+                    >
+                      {row.diff}
+                    </span>
+                  )}
+                </div>
               </div>
-            )}
+            ))}
+          </div>
+        )}
+
+        {/* Plain-English Explanation */}
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-xs">
+          <div className="flex items-start gap-1.5">
+            <CheckCircle className="w-3.5 h-3.5 text-amber-700 mt-0.5 shrink-0" aria-hidden="true" />
+            <div className="text-slate-700 leading-snug">
+              <SafeNarrative content={diff.explanation} />
+              {diff.recommendedNextStep && (
+                <div className="mt-1.5 pt-1 border-t border-amber-200 text-[11px] text-amber-900 font-medium">
+                  <strong>Next Step:</strong> {diff.recommendedNextStep}
+                </div>
+              )}
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Footer Actions */}
-        <div className="bg-slate-50 border-t border-slate-200 px-6 py-3.5 flex items-center justify-between gap-3">
-          {onViewActivityLog ? (
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onViewActivityLog();
-              }}
-              className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1.5"
-            >
-              <Clock className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>Inspect in Live Activity History Log →</span>
-            </button>
-          ) : (
-            <div />
+      {/* Footer Actions */}
+      <div className="bg-slate-50 border-t border-slate-200 px-3.5 py-2 flex items-center justify-between gap-2">
+        {onViewActivityLog ? (
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onViewActivityLog();
+            }}
+            className="text-xs font-semibold text-slate-700 hover:text-orange-600 flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <span>📜 View History</span>
+          </button>
+        ) : (
+          <span className="text-[10px] text-slate-400 font-mono">
+            {isHovered ? "Auto-dismiss paused" : "Auto-closing in 8s"}
+          </span>
+        )}
+
+        <div className="flex items-center gap-2">
+          {onViewActivityLog && (
+            <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
+              {isHovered ? "Paused" : "8s"}
+            </span>
           )}
-
           <button
             type="button"
             onClick={onClose}
-            className="utsav-btn utsav-btn-primary text-xs px-4 py-2 font-semibold shadow-xs"
+            className="utsav-btn utsav-btn-secondary text-xs px-3 py-1 font-semibold cursor-pointer"
+            aria-label="Dismiss modification diff"
           >
-            Got It
+            ✕ Dismiss
           </button>
         </div>
       </div>

@@ -56,7 +56,11 @@ export function scaleBudgetCategories(
 
   for (const item of budgetItems) {
     const isVar = VARIABLE_CATEGORIES.has(item.category);
-    const scaledAmount = isVar ? Math.round(item.allocatedAmount * ratio) : item.allocatedAmount;
+    const rawAllocated =
+      typeof item.allocatedAmount === "number" && !isNaN(item.allocatedAmount)
+        ? item.allocatedAmount
+        : Number((item as any).actualAmount) || Number((item as any).estimatedCost) || 0;
+    const scaledAmount = isVar ? Math.round(rawAllocated * ratio) : rawAllocated;
 
     const existing = categoryMap.get(item.category);
     if (existing) {

@@ -14,6 +14,11 @@ interface PageHeaderProps {
   onExportIcs: () => void;
   onOpenCustomEvent: () => void;
   language?: SupportedLanguage;
+  aiStatus?: {
+    configured: boolean;
+    model: string;
+    source: "gemini-live" | "deterministic-shield";
+  };
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
@@ -26,7 +31,8 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   onResetPreset,
   onExportIcs,
   onOpenCustomEvent,
-  language = "en"
+  language = "en",
+  aiStatus
 }) => {
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
 
@@ -63,6 +69,34 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
               {eventTitle}
             </h1>
             <span className={`utsav-badge ${badge.className}`}>{badge.label}</span>
+            {aiStatus && (
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                  aiStatus.configured && aiStatus.source === "gemini-live"
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                    : "bg-slate-100 text-slate-700 border-slate-300"
+                }`}
+                title={
+                  aiStatus.configured
+                    ? `Live Gemini inference active (${aiStatus.model}). Deterministic engine guarantees financial math.`
+                    : "Offline Deterministic Shield active."
+                }
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    aiStatus.configured && aiStatus.source === "gemini-live"
+                      ? "bg-emerald-600 animate-pulse"
+                      : "bg-slate-400"
+                  }`}
+                  aria-hidden="true"
+                />
+                <span>
+                  {aiStatus.configured && aiStatus.source === "gemini-live"
+                    ? "Gemini 3.5 (Live AI)"
+                    : "Deterministic Shield (Offline)"}
+                </span>
+              </span>
+            )}
           </div>
           <p className="text-xs sm:text-sm text-slate-500 font-mono m-0 tabular-nums">
             Target Date: <strong className="text-slate-700">{eventDate}</strong> ·{" "}

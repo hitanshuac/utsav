@@ -244,7 +244,9 @@ export async function runTestHarness() {
     await runScenario("RES-10", "Missing GEMINI_API_KEY returns HTTP 200 with deterministic fallback (provenance: 'fallback') in <10ms", async () => {
       // Force unconfigured Gemini status
       const originalKey = process.env.GEMINI_API_KEY;
+      const originalGoogleKey = process.env.GOOGLE_API_KEY;
       process.env.GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE";
+      delete process.env.GOOGLE_API_KEY;
       SecureLLMClient.getInstance().initClient();
 
       const overrunPayload: EventPlanInput = {
@@ -280,10 +282,18 @@ export async function runTestHarness() {
       const durationMs = performance.now() - start;
       const data = await res.json();
 
-      // Restore key
+      // Restore keys
       if (originalKey !== undefined) {
         process.env.GEMINI_API_KEY = originalKey;
+      } else {
+        delete process.env.GEMINI_API_KEY;
       }
+      if (originalGoogleKey !== undefined) {
+        process.env.GOOGLE_API_KEY = originalGoogleKey;
+      } else {
+        delete process.env.GOOGLE_API_KEY;
+      }
+      SecureLLMClient.getInstance().initClient();
 
       assert(res.status === 200, `Expected HTTP 200, got ${res.status}`);
       assert(data.provenance === "fallback", `Expected provenance 'fallback', got ${data.provenance}`);

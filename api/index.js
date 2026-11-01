@@ -1,5 +1,4 @@
 // server.ts
-import "dotenv/config";
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -21,14 +20,19 @@ var KNOWN_PLACEHOLDERS = /* @__PURE__ */ new Set([
 var SecureLLMClient = class _SecureLLMClient {
   constructor() {
     this.ai = null;
-    this.fallbackModel = "gemini-2.0-flash";
-    this.primaryModel = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+    this.fallbackModel = "gemini-3.5-flash-lite";
+    this.primaryModel = process.env.GEMINI_MODEL?.trim() || "gemini-3.5-flash";
     this.initClient();
   }
   initClient() {
-    const rawKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
+    let rawKey = (process.env.GEMINI_API_KEY || "").trim();
+    if (!rawKey || KNOWN_PLACEHOLDERS.has(rawKey) || rawKey.length < 10) {
+      rawKey = (process.env.GOOGLE_API_KEY || "").trim();
+    }
     const isPlaceholder = !rawKey || KNOWN_PLACEHOLDERS.has(rawKey) || rawKey.length < 10;
     if (!isPlaceholder) {
+      process.env.GEMINI_API_KEY = rawKey;
+      process.env.GOOGLE_API_KEY = rawKey;
       this.ai = new GoogleGenAI({
         apiKey: rawKey,
         httpOptions: {
@@ -55,7 +59,7 @@ var SecureLLMClient = class _SecureLLMClient {
         model: this.primaryModel,
         provider: "Google Gemini (@google/genai)",
         source: "gemini-live",
-        message: `Live Gemini inference active (Primary: ${this.primaryModel})`
+        message: `Live Gemini 3.5 inference active (Primary: ${this.primaryModel})`
       };
     }
     return {
@@ -67,7 +71,7 @@ var SecureLLMClient = class _SecureLLMClient {
     };
   }
   // Pre-flight sanitization (OWASP LLM01: Prompt Injection Prevention)
-  sanitizeInput(input, maxLength = 800) {
+  sanitizeInput(input, maxLength = 3e3) {
     return input.slice(0, maxLength).replace(/<[^>]*>?/gm, "").replace(/[{}[\]]/g, "").trim();
   }
   // Post-flight inspection (OWASP LLM06: Sensitive Information Disclosure)
@@ -125,11 +129,13 @@ var SecureLLMClient = class _SecureLLMClient {
       return await runCall(this.primaryModel);
     } catch (primaryErr) {
       const errMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
-      if (errMsg.includes("404") || errMsg.includes("NOT_FOUND") || errMsg.includes("unsupported")) {
-        console.warn(`[Gemini LLM] Primary model ${this.primaryModel} failed (${errMsg}). Retrying with fallback ${this.fallbackModel}...`);
+      console.warn(`[Gemini LLM] Primary model ${this.primaryModel} failed (${errMsg}). Retrying with fallback ${this.fallbackModel}...`);
+      try {
         return await runCall(this.fallbackModel);
+      } catch (fallbackErr) {
+        console.warn(`[Gemini LLM] Fallback model ${this.fallbackModel} failed:`, fallbackErr instanceof Error ? fallbackErr.message : fallbackErr);
+        throw fallbackErr;
       }
-      throw primaryErr;
     }
   }
 };
@@ -528,7 +534,8 @@ function scaleBudgetCategories(budgetItems, guestCount, baseGuestCount) {
   const categoryMap = /* @__PURE__ */ new Map();
   for (const item of budgetItems) {
     const isVar = VARIABLE_CATEGORIES.has(item.category);
-    const scaledAmount = isVar ? Math.round(item.allocatedAmount * ratio) : item.allocatedAmount;
+    const rawAllocated = typeof item.allocatedAmount === "number" && !isNaN(item.allocatedAmount) ? item.allocatedAmount : Number(item.actualAmount) || Number(item.estimatedCost) || 0;
+    const scaledAmount = isVar ? Math.round(rawAllocated * ratio) : rawAllocated;
     const existing = categoryMap.get(item.category);
     if (existing) {
       existing.total += scaledAmount;
@@ -826,11 +833,19 @@ function auditVendorQuoteOffline(vendorNote) {
 }
 
 // server.ts
+if (!process.env.VERCEL) {
+  try {
+    const { config } = await import("dotenv");
+    config();
+  } catch {
+  }
+}
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path.dirname(__filename);
 var requestRateMap = /* @__PURE__ */ new Map();
 function rateLimiter(req, res, next) {
-  const ip = req.ip || req.socket.remoteAddress || "127.0.0.1";
+  const forwarded = req.headers["x-forwarded-for"];
+  const ip = (typeof forwarded === "string" ? forwarded.split(",")[0]?.trim() : Array.isArray(forwarded) ? forwarded[0] : null) || req.ip || req.socket?.remoteAddress || "127.0.0.1";
   const now = Date.now();
   const windowMs = 60 * 1e3;
   const maxRequests = 15;
@@ -1037,7 +1052,8 @@ Return strictly valid JSON with the format:
           narrative: parsed.narrative || getRoleTailoredNarrative(planInput.personaLens || "family_host", deficit),
           provenance: "ai"
         });
-      } catch {
+      } catch (llmErr) {
+        console.warn("[/api/rebalance LLM failure]:", llmErr instanceof Error ? llmErr.message : llmErr);
         const fallbackStrategies = generateDeterministicTradeoffs(
           deficit,
           evaluation.scaledCategories,
@@ -1118,7 +1134,8 @@ Return strictly valid JSON:
           negotiationQuestions,
           provenance: "ai"
         });
-      } catch {
+      } catch (llmErr) {
+        console.warn("[/api/audit-vendor LLM failure]:", llmErr instanceof Error ? llmErr.message : llmErr);
         const fallbackAudit = auditVendorQuoteOffline(sanitizedNote);
         res.json({
           ...fallbackAudit,
@@ -1142,18 +1159,31 @@ Return strictly valid JSON:
       });
     }
   });
+  app2.use((req, _res, next) => {
+    if (req.originalUrl && req.url !== req.originalUrl) {
+      req.url = req.originalUrl;
+    }
+    next();
+  });
   return app2;
 }
 var app = createApp();
 var PORT = Number(process.env.APP_PORT || process.env.PORT) || 3e3;
 async function startServer() {
+  if (process.env.VERCEL === "1") {
+    return app;
+  }
   const distPath = path.join(__dirname, "dist");
   const distAssetsPath = path.join(distPath, "assets");
   if (process.env.NODE_ENV === "production" && fs.existsSync(distAssetsPath)) {
     app.use("/assets", express.static(distAssetsPath, { maxAge: "1d" }));
   }
   if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
+    const vitePkg = "vite";
+    const { createServer: createViteServer } = await import(
+      /* @vite-ignore */
+      vitePkg
+    );
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa"

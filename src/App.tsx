@@ -1,4 +1,4 @@
-import { useState, useMemo, lazy, Suspense } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { AppBar } from "./components/AppBar";
 import { TopicTabs, TopicTabId } from "./components/TopicTabs";
 import { AlertBanner } from "./components/AlertBanner";
@@ -55,6 +55,50 @@ export default function App() {
   const [actionDiffData, setActionDiffData] = useState<ActionDiffData | null>(null);
   const [language, setLanguage] = useState<SupportedLanguage>("en");
 
+  // Live Gemini AI Status & Inference State
+  const [aiStatus, setAiStatus] = useState<{
+    configured: boolean;
+    model: string;
+    source: "gemini-live" | "deterministic-shield";
+  }>({
+    configured: true,
+    model: "gemini-3.5-flash",
+    source: "gemini-live"
+  });
+  const [aiTradeoffs, setAiTradeoffs] = useState<TradeoffStrategy[] | null>(null);
+  const [aiNarrative, setAiNarrative] = useState<string | null>(null);
+  const [aiProvenance, setAiProvenance] = useState<"ai" | "fallback">("fallback");
+  const [isRebalancing, setIsRebalancing] = useState<boolean>(false);
+
+  // Poll / check AI health status on mount
+  useEffect(() => {
+    fetch("/api/health")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.llm) {
+          setAiStatus({
+            configured: Boolean(data.llm.configured),
+            model: data.llm.model || "gemini-3.5-flash",
+            source: data.llm.source || "gemini-live"
+          });
+        }
+      })
+      .catch(() => {
+        setAiStatus({
+          configured: false,
+          model: "none",
+          source: "deterministic-shield"
+        });
+      });
+  }, []);
+
+  // Reset custom AI trade-offs if budget items, guest count, or cap changes
+  useEffect(() => {
+    setAiTradeoffs(null);
+    setAiNarrative(null);
+    setAiProvenance("fallback");
+  }, [guestCount, budgetCap, budgetItems, persona]);
+
   // Deterministic Evaluation — Single Source of Truth
   const evaluation = useMemo(() => {
     return evaluateEventPlan({
@@ -78,16 +122,67 @@ export default function App() {
     milestones
   ]);
 
-  // Deterministic Trade-off Strategies
+  // Trade-off Strategies: AI proposals if fetched, otherwise deterministic fallback
   const tradeoffs = useMemo(() => {
     if (evaluation.variance < 0) {
+      if (aiTradeoffs && aiTradeoffs.length > 0) {
+        return aiTradeoffs;
+      }
       return generateDeterministicTradeoffs(
         Math.abs(evaluation.variance),
         evaluation.scaledCategories
       );
     }
     return [];
-  }, [evaluation.variance, evaluation.scaledCategories]);
+  }, [evaluation.variance, evaluation.scaledCategories, aiTradeoffs]);
+
+  // Consult Gemini AI for qualitative trade-off phrasing & compromise strategies
+  const handleConsultAiTradeoffs = async () => {
+    if (evaluation.variance >= 0) return;
+    setIsRebalancing(true);
+    try {
+      const res = await fetch("/api/rebalance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventTitle,
+          personaLens: persona,
+          guestCount,
+          baseGuestCount,
+          totalBudgetCap: budgetCap,
+          daysRemaining,
+          budgetItems,
+          milestones
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.strategies) && data.strategies.length > 0) {
+          setAiTradeoffs(data.strategies);
+          if (data.narrative) setAiNarrative(data.narrative);
+          const prov = data.provenance === "ai" ? "ai" : "fallback";
+          setAiProvenance(prov);
+          logActivityEvent({
+            taskId: "ai-rebalance",
+            taskTitle: `Consulted Gemini 3.5 AI Advisor (${prov === "ai" ? "Live AI" : "Deterministic Fallback"})`,
+            category: "decor",
+            channel: "system",
+            vendorName: "Google Gemini 3.5",
+            recipient: "Host & Coordinator",
+            summary: `Generated ${data.strategies.length} trade-off strategies for ₹${Math.abs(evaluation.variance).toLocaleString("en-IN")} deficit.`,
+            loopStatus: "closed"
+          });
+          return;
+        }
+      }
+    } catch {
+      // offline fallback
+    } finally {
+      setIsRebalancing(false);
+    }
+    setAiTradeoffs(null);
+    setAiProvenance("fallback");
+  };
 
   // Trigger Action Diff Modal Helper
   const triggerActionDiff = (params: {
@@ -653,6 +748,7 @@ export default function App() {
         onExportIcs={handleExportIcs}
         onOpenCustomEvent={() => setIsCustomEventOpen(true)}
         language={language}
+        aiStatus={aiStatus}
       />
 
       {/* REGION 4: 12-COLUMN EXECUTION GRID (8 MAIN / 4 SIDEBAR) */}
@@ -683,11 +779,16 @@ export default function App() {
           sampleVendorNote={sampleVendorNote}
           filterQuery={searchQuery}
           onClearFilter={() => setSearchQuery("")}
+          onSearchChange={setSearchQuery}
           daysRemaining={daysRemaining}
           eventTitle={eventTitle}
           persona={persona}
           language={language}
           onTabChange={setActiveTab}
+          onConsultAiTradeoffs={handleConsultAiTradeoffs}
+          isRebalancing={isRebalancing}
+          aiNarrative={aiNarrative}
+          aiProvenance={aiProvenance}
           onActionTriggered={(name, explanation, deltas) => {
             triggerActionDiff({
               actionName: name,

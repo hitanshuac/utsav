@@ -1,18 +1,21 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import {
   GitBranch,
   Lock,
   CheckCircle,
   Clock,
-  ArrowRight,
   Send,
   MessageSquare,
   Mail,
   Table as TableIcon,
   Layers,
-  ChevronRight
+  ChevronRight,
+  ShieldAlert,
+  Zap,
+  Sparkles,
+  Info
 } from "lucide-react";
-import { MilestoneTask } from "../types/planner";
+import { MilestoneTask, PersonaLens } from "../types/planner";
 import { computeDelayCascade, DelayImpactSummary } from "../lib/engine/delay-cascade";
 import {
   triggerWhatsAppNotification,
@@ -36,6 +39,7 @@ interface VisualDependencyFlowchartProps {
   onUpdateTaskStatus?: (taskId: string, status: "pending" | "in_progress" | "completed") => void;
   onActionTriggered?: (actionName: string, details: string, deltas?: any[]) => void;
   language?: SupportedLanguage;
+  persona?: PersonaLens;
 }
 
 interface StageColumn {
@@ -43,6 +47,19 @@ interface StageColumn {
   title: string;
   subtitle: string;
   tasks: MilestoneTask[];
+}
+
+interface SvgConnectionLine {
+  id: string;
+  fromId: string;
+  toId: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  isCompleted: boolean;
+  isBlocked: boolean;
+  isActive: boolean;
 }
 
 export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps> = ({
@@ -54,10 +71,12 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
   onCycleTaskStatus,
   onUpdateTaskStatus,
   onActionTriggered,
-  language = "en"
+  language = "en",
+  persona = "family_host"
 }) => {
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(milestones[0]?.id || null);
+  const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
   const [activeDelayImpact, setActiveDelayImpact] = useState<DelayImpactSummary | null>(null);
   const [activeChannel, setActiveChannel] = useState<"whatsapp" | "email">("whatsapp");
   const [activeTemplateType, setActiveTemplateType] = useState<EdgeCaseTemplateType>("standard");
@@ -65,6 +84,10 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
   const [customSubject, setCustomSubject] = useState<string>("");
   const [dispatchFeedback, setDispatchFeedback] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"flowchart" | "table">("flowchart");
+
+  const flowContainerRef = useRef<HTMLDivElement>(null);
+  const [connections, setConnections] = useState<SvgConnectionLine[]>([]);
+  const [svgDimensions, setSvgDimensions] = useState<{ width: number; height: number }>({ width: 1000, height: 500 });
 
   // Map of tasks for O(1) lookup
   const taskMap = useMemo(() => {
@@ -142,8 +165,91 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
     ];
   }, [milestones, taskMap]);
 
+  // Compute SVG physical node-to-node bezier connector coordinates
+  const recalculateConnections = useCallback(() => {
+    const container = flowContainerRef.current;
+    if (!container) return;
+
+    const cRect = container.getBoundingClientRect();
+    const scrollLeft = container.scrollLeft;
+    const scrollTop = container.scrollTop;
+    const scrollW = Math.max(container.scrollWidth, container.clientWidth, 980);
+    const scrollH = Math.max(container.scrollHeight, container.clientHeight, 440);
+
+    setSvgDimensions({ width: scrollW, height: scrollH });
+
+    const lines: SvgConnectionLine[] = [];
+
+    milestones.forEach((task) => {
+      task.dependsOn.forEach((prereqId) => {
+        const fromPort = container.querySelector(`[data-port-out="${prereqId}"]`);
+        const toPort = container.querySelector(`[data-port-in="${task.id}"]`);
+
+        if (fromPort && toPort) {
+          const fRect = fromPort.getBoundingClientRect();
+          const tRect = toPort.getBoundingClientRect();
+
+          const x1 = fRect.left + fRect.width / 2 - cRect.left + scrollLeft;
+          const y1 = fRect.top + fRect.height / 2 - cRect.top + scrollTop;
+          const x2 = tRect.left + tRect.width / 2 - cRect.left + scrollLeft;
+          const y2 = tRect.top + tRect.height / 2 - cRect.top + scrollTop;
+
+          const prereqTask = taskMap.get(prereqId);
+          const isCompleted = prereqTask?.status === "completed";
+          const isBlocked = bottlenecks.includes(task.id) || !isCompleted;
+          const isActive =
+            selectedTaskId === prereqId ||
+            selectedTaskId === task.id ||
+            hoveredTaskId === prereqId ||
+            hoveredTaskId === task.id;
+
+          lines.push({
+            id: `${prereqId}->${task.id}`,
+            fromId: prereqId,
+            toId: task.id,
+            x1,
+            y1,
+            x2,
+            y2,
+            isCompleted,
+            isBlocked,
+            isActive
+          });
+        }
+      });
+    });
+
+    setConnections(lines);
+  }, [milestones, bottlenecks, selectedTaskId, hoveredTaskId, taskMap]);
+
+  // Recalculate on mount, selection, resize, and scroll
+  useEffect(() => {
+    recalculateConnections();
+    const animId = requestAnimationFrame(recalculateConnections);
+    const timer = setTimeout(recalculateConnections, 80);
+
+    const container = flowContainerRef.current;
+    if (!container) return () => { cancelAnimationFrame(animId); clearTimeout(timer); };
+
+    const resizeObserver = new ResizeObserver(() => {
+      recalculateConnections();
+    });
+    resizeObserver.observe(container);
+
+    window.addEventListener("resize", recalculateConnections);
+    container.addEventListener("scroll", recalculateConnections);
+
+    return () => {
+      cancelAnimationFrame(animId);
+      clearTimeout(timer);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", recalculateConnections);
+      container.removeEventListener("scroll", recalculateConnections);
+    };
+  }, [recalculateConnections, viewMode]);
+
   // Synchronize message body when selected task or template changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (!selectedTask) return;
 
     const template = buildEditableTemplate(
@@ -359,6 +465,27 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
         {t.flowchartSubtitle}
       </p>
 
+      {/* SOLID-SURFACE CONNECTION STATUS LEGEND BAR */}
+      <div className="bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 mb-3.5 flex items-center gap-4 text-[11px] font-mono flex-wrap">
+        <span className="text-slate-600 font-bold uppercase tracking-wider text-[10px]">Flow Status:</span>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block" />
+          <span className="text-slate-700 font-semibold">Completed Prerequisite (Solid Green)</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-red-600 critical-pulse-dot inline-block" />
+          <span className="text-red-700 font-semibold">Blocked / Bottleneck (Dashed Red)</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 inline-block" />
+          <span className="text-indigo-800 font-semibold">Active Node / Trace (Glowing Indigo)</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block" />
+          <span className="text-slate-600">Pending Sequence (Dotted Slate)</span>
+        </div>
+      </div>
+
       {/* OVERARCHING STAGE PROGRESSION TRACK (VISUAL CONNECTIVITY PIPELINE) */}
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 mb-4 overflow-x-auto">
         <div className="flex items-center justify-between min-w-[620px] gap-2">
@@ -397,159 +524,362 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
         </div>
       </div>
 
-      {/* VIEW 1: INTERACTIVE VISUAL FLOWCHART */}
+      {/* VIEW 1: INTERACTIVE VISUAL FLOWCHART WITH DYNAMIC SVG BEZIER CONNECTIONS */}
       {viewMode === "flowchart" && (
         <div className="space-y-4">
-          {/* Stage-by-Stage Columns */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 relative overflow-x-auto pb-2">
-            {stages.map((stage) => (
-              <div
-                key={stage.stageNumber}
-                className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col gap-2.5 min-w-[220px]"
+          {/* Scrollable Stage-by-Stage Graph Container */}
+          <div
+            ref={flowContainerRef}
+            className="bg-slate-50 border border-slate-200 rounded-xl p-4 overflow-x-auto relative shadow-xs"
+            style={{ minHeight: "440px" }}
+          >
+            <div className="min-w-[980px] grid grid-cols-4 gap-6 relative">
+              {/* Dynamic SVG Connection Overlay */}
+              <svg
+                className="absolute top-0 left-0 pointer-events-none"
+                style={{
+                  width: svgDimensions.width,
+                  height: svgDimensions.height,
+                  zIndex: 1
+                }}
+                aria-hidden="true"
               >
-                {/* Stage Header */}
-                <div className="border-b border-slate-200 pb-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-extrabold uppercase text-slate-700 tracking-wider">
-                      {stage.title}
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-400">
-                      {stage.tasks.length} task(s)
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-slate-500">{stage.subtitle}</span>
-                </div>
+                <defs>
+                  <marker
+                    id="dag-arrow-completed"
+                    viewBox="0 0 10 10"
+                    refX="8"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#059669" />
+                  </marker>
+                  <marker
+                    id="dag-arrow-blocked"
+                    viewBox="0 0 10 10"
+                    refX="8"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#dc2626" />
+                  </marker>
+                  <marker
+                    id="dag-arrow-active"
+                    viewBox="0 0 10 10"
+                    refX="8"
+                    refY="5"
+                    markerWidth="7"
+                    markerHeight="7"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#4f46e5" />
+                  </marker>
+                  <marker
+                    id="dag-arrow-pending"
+                    viewBox="0 0 10 10"
+                    refX="8"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#94a3b8" />
+                  </marker>
+                </defs>
 
-                {/* Nodes in this Stage */}
-                <div className="flex flex-col gap-2 flex-1">
-                  {stage.tasks.length === 0 ? (
-                    <div className="text-[11px] text-slate-400 py-3 text-center italic">
-                      No milestones in this tier
-                    </div>
-                  ) : (
-                    stage.tasks.map((task) => {
-                      const isSelected = selectedTaskId === task.id;
-                      const isBottleneck = bottlenecks.includes(task.id);
-                      const hasUncompletedPrereq = task.dependsOn.some((pId) => {
-                        const parent = taskMap.get(pId);
-                        return parent && parent.status !== "completed";
-                      });
+                {/* Render background inactive lines */}
+                {connections
+                  .filter((c) => !c.isActive)
+                  .map((conn) => {
+                    const dx = Math.max((conn.x2 - conn.x1) * 0.45, 24);
+                    const pathD = `M ${conn.x1} ${conn.y1} C ${conn.x1 + dx} ${conn.y1}, ${conn.x2 - dx} ${conn.y2}, ${conn.x2} ${conn.y2}`;
 
-                      const isCriticalPathAlert =
-                        isBottleneck ||
-                        hasUncompletedPrereq ||
-                        (task.urgency === "critical" && task.status !== "completed") ||
-                        ((task.leadTimeDays ?? task.deadlineDaysBeforeEvent) > daysRemaining && task.status !== "completed");
-
-                      const downstream = getDownstreamTasks(task.id);
-
+                    if (conn.isBlocked) {
                       return (
-                        <div
-                          key={task.id}
-                          onClick={() => handleSelectNode(task.id)}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") handleSelectNode(task.id);
-                          }}
-                          className={`cursor-pointer rounded-xl p-3 border transition-all text-left shadow-xs ${
-                            isCriticalPathAlert
-                              ? `critical-flash-card ${isSelected ? "ring-2 ring-red-600" : ""}`
-                              : isSelected
-                              ? "border-indigo-600 bg-white ring-2 ring-indigo-600"
-                              : "bg-white border-slate-200 hover:border-slate-300"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-1 mb-1.5">
-                            <div className="flex items-center gap-1.5">
-                              {isCriticalPathAlert && (
-                                <span className="critical-pulse-dot shrink-0" aria-hidden="true" />
-                              )}
-                              <span className="text-[10px] font-mono font-bold text-slate-500">
-                                {task.id.toUpperCase()}
-                              </span>
-                              <span className="text-[9px] uppercase px-1.5 py-0.2 rounded font-semibold bg-slate-100 text-slate-600">
-                                {task.category}
+                        <path
+                          key={conn.id}
+                          d={pathD}
+                          fill="none"
+                          stroke="#dc2626"
+                          strokeWidth="2.5"
+                          strokeDasharray="6 4"
+                          markerEnd="url(#dag-arrow-blocked)"
+                        />
+                      );
+                    }
+
+                    if (conn.isCompleted) {
+                      return (
+                        <path
+                          key={conn.id}
+                          d={pathD}
+                          fill="none"
+                          stroke="#059669"
+                          strokeWidth="2"
+                          markerEnd="url(#dag-arrow-completed)"
+                        />
+                      );
+                    }
+
+                    return (
+                      <path
+                        key={conn.id}
+                        d={pathD}
+                        fill="none"
+                        stroke="#94a3b8"
+                        strokeWidth="1.5"
+                        strokeDasharray="4 4"
+                        markerEnd="url(#dag-arrow-pending)"
+                      />
+                    );
+                  })}
+
+                {/* Render highlighted active lines on top with bold stroke and glowing halo */}
+                {connections
+                  .filter((c) => c.isActive)
+                  .map((conn) => {
+                    const dx = Math.max((conn.x2 - conn.x1) * 0.45, 24);
+                    const pathD = `M ${conn.x1} ${conn.y1} C ${conn.x1 + dx} ${conn.y1}, ${conn.x2 - dx} ${conn.y2}, ${conn.x2} ${conn.y2}`;
+
+                    return (
+                      <g key={`active-${conn.id}`}>
+                        <path
+                          d={pathD}
+                          fill="none"
+                          stroke="#e0e7ff"
+                          strokeWidth="8"
+                          strokeLinecap="round"
+                        />
+                        <path
+                          d={pathD}
+                          fill="none"
+                          stroke="#4f46e5"
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          markerEnd="url(#dag-arrow-active)"
+                        />
+                      </g>
+                    );
+                  })}
+              </svg>
+
+              {/* 4 Stage Columns */}
+              {stages.map((stage) => (
+                <div
+                  key={stage.stageNumber}
+                  className="flex flex-col gap-3 min-w-[220px] relative z-10"
+                >
+                  {/* Stage Header */}
+                  <div className="bg-white border border-slate-200 rounded-lg p-2.5 shadow-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-extrabold uppercase text-slate-800 tracking-wider">
+                        {stage.title}
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                        {stage.tasks.length} task(s)
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 block mt-0.5">{stage.subtitle}</span>
+                  </div>
+
+                  {/* Nodes in this Stage */}
+                  <div className="flex flex-col gap-3 flex-1">
+                    {stage.tasks.length === 0 ? (
+                      <div className="text-[11px] text-slate-400 py-6 text-center italic bg-white border border-dashed border-slate-200 rounded-xl">
+                        No milestones in this stage
+                      </div>
+                    ) : (
+                      stage.tasks.map((task) => {
+                        const isSelected = selectedTaskId === task.id;
+                        const isHovered = hoveredTaskId === task.id;
+                        const isBottleneck = bottlenecks.includes(task.id);
+                        const hasUncompletedPrereq = task.dependsOn.some((pId) => {
+                          const parent = taskMap.get(pId);
+                          return parent && parent.status !== "completed";
+                        });
+                        const allPrereqsDone =
+                          task.dependsOn.length > 0 &&
+                          task.dependsOn.every((pId) => taskMap.get(pId)?.status === "completed");
+
+                        const isCriticalPathAlert =
+                          isBottleneck ||
+                          hasUncompletedPrereq ||
+                          (task.urgency === "critical" && task.status !== "completed") ||
+                          ((task.leadTimeDays ?? task.deadlineDaysBeforeEvent) > daysRemaining && task.status !== "completed");
+
+                        const downstream = getDownstreamTasks(task.id);
+
+                        return (
+                          <div
+                            key={task.id}
+                            data-task-id={task.id}
+                            onClick={() => handleSelectNode(task.id)}
+                            onMouseEnter={() => setHoveredTaskId(task.id)}
+                            onMouseLeave={() => setHoveredTaskId(null)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") handleSelectNode(task.id);
+                            }}
+                            className={`relative z-10 cursor-pointer rounded-xl p-3 border transition-all text-left shadow-xs ${
+                              isCriticalPathAlert
+                                ? `critical-flash-card ${isSelected ? "ring-2 ring-red-600" : ""}`
+                                : isSelected
+                                ? "border-indigo-600 bg-white ring-2 ring-indigo-600 shadow-md"
+                                : isHovered
+                                ? "border-indigo-400 bg-white shadow-xs"
+                                : "bg-white border-slate-200 hover:border-slate-300"
+                            }`}
+                          >
+                            {/* Input Port Anchor Dot (Left Terminal) */}
+                            {task.dependsOn.length > 0 && (
+                              <span
+                                data-port-in={task.id}
+                                className={`absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-white shadow-xs z-20 ${
+                                  hasUncompletedPrereq || isBottleneck
+                                    ? "bg-red-600 critical-pulse-dot"
+                                    : allPrereqsDone
+                                    ? "bg-emerald-600"
+                                    : "bg-slate-400"
+                                }`}
+                                title={`Prerequisite input terminal (Requires: ${task.dependsOn.join(", ")})`}
+                              />
+                            )}
+
+                            {/* Output Port Anchor Dot (Right Terminal) */}
+                            {downstream.length > 0 && (
+                              <span
+                                data-port-out={task.id}
+                                className={`absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-white shadow-xs z-20 ${
+                                  task.status === "completed"
+                                    ? "bg-emerald-600"
+                                    : isSelected
+                                    ? "bg-indigo-600"
+                                    : "bg-indigo-400"
+                                }`}
+                                title={`Downstream output terminal (Unlocks: ${downstream.map((d) => d.id).join(", ")})`}
+                              />
+                            )}
+
+                            {/* Node Title & Badges */}
+                            <div className="flex items-start justify-between gap-1 mb-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {isCriticalPathAlert && (
+                                  <span className="critical-pulse-dot shrink-0" aria-hidden="true" />
+                                )}
+                                <span className="text-[10px] font-mono font-bold text-slate-500">
+                                  {task.id.toUpperCase()}
+                                </span>
+                                <span className="text-[9px] uppercase px-1.5 py-0.2 rounded font-semibold bg-slate-100 text-slate-600">
+                                  {task.category}
+                                </span>
+
+                                {/* Role Lens Tailored Badge */}
+                                {persona === "family_host" && task.category === "catering" && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                    👑 Host Priority: Feast
+                                  </span>
+                                )}
+                                {persona === "family_host" && task.category === "venue" && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                    👑 Host Essential
+                                  </span>
+                                )}
+                                {persona === "wedding_coordinator" && isCriticalPathAlert && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-100 text-indigo-900 border border-indigo-300">
+                                    ⚡ Coordinator SLA
+                                  </span>
+                                )}
+                                {persona === "community_organizer" &&
+                                  (task.category === "logistics" ||
+                                    task.title.toLowerCase().includes("permit") ||
+                                    task.title.toLowerCase().includes("noc")) && (
+                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                      🛡️ Civic Safety
+                                    </span>
+                                  )}
+                              </div>
+
+                              <span
+                                className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase shrink-0 ${
+                                  task.status === "completed"
+                                    ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                    : task.status === "in_progress"
+                                    ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                    : "bg-slate-100 text-slate-700 border border-slate-200"
+                                }`}
+                              >
+                                {task.status.replace("_", " ")}
                               </span>
                             </div>
 
-                            <span
-                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase ${
-                                task.status === "completed"
-                                  ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                                  : task.status === "in_progress"
-                                  ? "bg-amber-100 text-amber-800 border border-amber-200"
-                                  : "bg-slate-100 text-slate-700 border border-slate-200"
-                              }`}
-                            >
-                              {task.status.replace("_", " ")}
-                            </span>
-                          </div>
+                            <h3 className="text-xs font-bold text-slate-900 leading-snug mb-1">
+                              {task.title}
+                            </h3>
 
-                          <h3 className="text-xs font-bold text-slate-900 leading-snug mb-1">
-                            {task.title}
-                          </h3>
+                            <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono mt-1">
+                              <span>Lead: {task.leadTimeDays || task.deadlineDaysBeforeEvent}d</span>
+                              {hasUncompletedPrereq && (
+                                <span className="text-red-700 flex items-center gap-0.5 font-sans font-bold">
+                                  <Lock className="w-2.5 h-2.5" />
+                                  <span>Blocked</span>
+                                </span>
+                              )}
+                            </div>
 
-                          <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono mt-1">
-                            <span>Lead: {task.leadTimeDays || task.deadlineDaysBeforeEvent}d</span>
-                            {hasUncompletedPrereq && (
-                              <span className="text-red-700 flex items-center gap-0.5 font-sans font-bold">
-                                <Lock className="w-2.5 h-2.5" />
-                                <span>Blocked</span>
-                              </span>
-                            )}
-                          </div>
+                            {/* Explicit Visual Dependency Badges */}
+                            <div className="mt-2 pt-1.5 border-t border-slate-100 flex flex-col gap-1 text-[9px] font-mono">
+                              {task.dependsOn.length > 0 ? (
+                                <div className="flex items-center gap-1 text-slate-600 flex-wrap">
+                                  <span className="text-slate-400">Requires:</span>
+                                  {task.dependsOn.map((pId) => {
+                                    const pTask = taskMap.get(pId);
+                                    const isPrereqDone = pTask?.status === "completed";
+                                    return (
+                                      <span
+                                        key={pId}
+                                        className={`px-1 rounded font-bold ${
+                                          isPrereqDone
+                                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                            : "bg-red-50 text-red-700 border border-red-300"
+                                        }`}
+                                      >
+                                        {pId.toUpperCase()} {isPrereqDone ? "✓" : "🔒"}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="text-slate-400">Root Milestone (No Prereqs)</div>
+                              )}
 
-                          {/* Explicit Visual Dependency Badges */}
-                          <div className="mt-2 pt-1.5 border-t border-slate-100 flex flex-col gap-1 text-[9px] font-mono">
-                            {task.dependsOn.length > 0 ? (
-                              <div className="flex items-center gap-1 text-slate-600">
-                                <span className="text-slate-400">Requires:</span>
-                                {task.dependsOn.map((pId) => {
-                                  const pTask = taskMap.get(pId);
-                                  const isPrereqDone = pTask?.status === "completed";
-                                  return (
+                              {downstream.length > 0 && (
+                                <div className="flex items-center gap-1 text-indigo-700 flex-wrap">
+                                  <span className="text-slate-400">Unlocks:</span>
+                                  {downstream.map((d) => (
                                     <span
-                                      key={pId}
-                                      className={`px-1 rounded font-bold ${
-                                        isPrereqDone
-                                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                          : "bg-red-50 text-red-700 border border-red-300"
-                                      }`}
+                                      key={d.id}
+                                      className="bg-indigo-50 text-indigo-700 border border-indigo-200 px-1 rounded font-bold"
                                     >
-                                      {pId.toUpperCase()} {isPrereqDone ? "✓" : "🔒"}
+                                      {d.id.toUpperCase()} →
                                     </span>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <div className="text-slate-400">Root Milestone (No Prereqs)</div>
-                            )}
-
-                            {downstream.length > 0 && (
-                              <div className="flex items-center gap-1 text-indigo-700">
-                                <span className="text-slate-400">Unlocks:</span>
-                                {downstream.map((d) => (
-                                  <span
-                                    key={d.id}
-                                    className="bg-indigo-50 text-indigo-700 border border-indigo-200 px-1 rounded font-bold"
-                                  >
-                                    {d.id.toUpperCase()} →
-                                  </span>
-                                ))}
-                              </div>
-                            )}
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })
-                  )}
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-
-
 
           {/* INTERACTIVE NODE INSPECTION & EXECUTION PANEL */}
           {selectedTask && (
@@ -767,7 +1097,7 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
         </div>
       )}
 
-      {/* VIEW 2: TABULAR VIEW (KAHN'S ORDER) */}
+      {/* VIEW 2: TABULAR VIEW (TOPOLOGICAL ORDER) */}
       {viewMode === "table" && (
         <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
           <table className="w-full text-left text-xs border-collapse">

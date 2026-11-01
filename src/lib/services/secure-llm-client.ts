@@ -21,18 +21,26 @@ export class SecureLLMClient {
   private static instance: SecureLLMClient;
   private ai: GoogleGenAI | null = null;
   private primaryModel: string;
-  private fallbackModel = "gemini-2.0-flash";
+  private fallbackModel = "gemini-3.5-flash-lite";
 
   private constructor() {
-    this.primaryModel = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+    this.primaryModel = process.env.GEMINI_MODEL?.trim() || "gemini-3.5-flash";
     this.initClient();
   }
 
   public initClient(): void {
-    const rawKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
+    // Explicitly prioritize GEMINI_API_KEY from .env / runtime
+    let rawKey = (process.env.GEMINI_API_KEY || "").trim();
+    if (!rawKey || KNOWN_PLACEHOLDERS.has(rawKey) || rawKey.length < 10) {
+      rawKey = (process.env.GOOGLE_API_KEY || "").trim();
+    }
     const isPlaceholder = !rawKey || KNOWN_PLACEHOLDERS.has(rawKey) || rawKey.length < 10;
 
     if (!isPlaceholder) {
+      // Synchronize environment keys so @google/genai SDK never collides with stale ambient system variables
+      process.env.GEMINI_API_KEY = rawKey;
+      process.env.GOOGLE_API_KEY = rawKey;
+
       this.ai = new GoogleGenAI({
         apiKey: rawKey,
         httpOptions: {
@@ -62,7 +70,7 @@ export class SecureLLMClient {
         model: this.primaryModel,
         provider: "Google Gemini (@google/genai)",
         source: "gemini-live",
-        message: `Live Gemini inference active (Primary: ${this.primaryModel})`
+        message: `Live Gemini 3.5 inference active (Primary: ${this.primaryModel})`
       };
     }
 
@@ -76,7 +84,7 @@ export class SecureLLMClient {
   }
 
   // Pre-flight sanitization (OWASP LLM01: Prompt Injection Prevention)
-  public sanitizeInput(input: string, maxLength = 800): string {
+  public sanitizeInput(input: string, maxLength = 3000): string {
     return input
       .slice(0, maxLength)
       .replace(/<[^>]*>?/gm, "") // Strip HTML tags
@@ -146,13 +154,14 @@ export class SecureLLMClient {
     try {
       return await runCall(this.primaryModel);
     } catch (primaryErr) {
-      // If primary model returns 404 or unsupported on the user's specific tier, attempt standard fallback model
       const errMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
-      if (errMsg.includes("404") || errMsg.includes("NOT_FOUND") || errMsg.includes("unsupported")) {
-        console.warn(`[Gemini LLM] Primary model ${this.primaryModel} failed (${errMsg}). Retrying with fallback ${this.fallbackModel}...`);
+      console.warn(`[Gemini LLM] Primary model ${this.primaryModel} failed (${errMsg}). Retrying with fallback ${this.fallbackModel}...`);
+      try {
         return await runCall(this.fallbackModel);
+      } catch (fallbackErr) {
+        console.warn(`[Gemini LLM] Fallback model ${this.fallbackModel} failed:`, fallbackErr instanceof Error ? fallbackErr.message : fallbackErr);
+        throw fallbackErr;
       }
-      throw primaryErr;
     }
   }
 }
