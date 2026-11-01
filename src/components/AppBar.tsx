@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from "react";
-import { Search, ChevronDown, Check, ShieldCheck, Clock } from "lucide-react";
+import { ChevronDown, Search, ShieldCheck, Check, Clock, Globe } from "lucide-react";
 import { PersonaLens } from "../types/planner";
 import { JUDGE_PRESETS, JudgePreset } from "../lib/presets";
 import { getActivityEvents, subscribeToEventLogger } from "../lib/services/event-logger";
+import { SupportedLanguage, TRANSLATIONS } from "../lib/i18n";
 
 interface AppBarProps {
   currentPersona: PersonaLens;
   onSelectPersona: (persona: PersonaLens) => void;
-  activePresetId: string;
+  activePresetId?: string;
   onSelectPreset: (preset: JudgePreset) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onOpenActivityHistory?: () => void;
+  language?: SupportedLanguage;
+  onLanguageChange?: (lang: SupportedLanguage) => void;
 }
 
 export const AppBar: React.FC<AppBarProps> = ({
@@ -21,11 +24,15 @@ export const AppBar: React.FC<AppBarProps> = ({
   onSelectPreset,
   searchQuery,
   onSearchChange,
-  onOpenActivityHistory
+  onOpenActivityHistory,
+  language = "en",
+  onLanguageChange
 }) => {
+  const t = TRANSLATIONS[language] || TRANSLATIONS.en;
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
-  const [activityCount, setActivityCount] = useState<number>(() => getActivityEvents().length);
+  const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const [activityCount, setActivityCount] = useState<number>(0);
 
   useEffect(() => {
     const updateCount = () => setActivityCount(getActivityEvents().length);
@@ -35,12 +42,20 @@ export const AppBar: React.FC<AppBarProps> = ({
   }, []);
 
   const personas: { id: PersonaLens; label: string; desc: string }[] = [
-    { id: "family_host", label: "Family Host", desc: "Hospitality & Per-Plate Focus" },
-    { id: "wedding_coordinator", label: "Wedding Coordinator", desc: "DAG Critical Path & Vendor SLAs" },
-    { id: "community_organizer", label: "Community Organizer", desc: "Civic Permits & Mass Rationing" }
+    { id: "family_host", label: t.personaFamilyHost, desc: t.personaFamilyHostDesc },
+    { id: "wedding_coordinator", label: t.personaWeddingCoord, desc: t.personaWeddingCoordDesc },
+    { id: "community_organizer", label: t.personaCommunityOrg, desc: t.personaCommunityOrgDesc }
   ];
 
-  const currentRoleLabel = personas.find((p) => p.id === currentPersona)?.label || "Family Host";
+  const currentRoleLabel = personas.find((p) => p.id === currentPersona)?.label || t.personaFamilyHost;
+
+  const languages: { id: SupportedLanguage; label: string }[] = [
+    { id: "en", label: "English" },
+    { id: "hi", label: "हिंदी (Hindi)" },
+    { id: "hinglish", label: "Hinglish" }
+  ];
+
+  const currentLangLabel = languages.find((l) => l.id === language)?.label || "English";
 
   return (
     <header className="utsav-r1-appbar" aria-label="Top Application Bar">
@@ -48,7 +63,8 @@ export const AppBar: React.FC<AppBarProps> = ({
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           <span className="font-extrabold text-xl tracking-tight text-slate-900 flex items-center gap-1.5">
-            <span style={{ color: "var(--c-primary)" }}>Utsav</span>AI
+            <span style={{ color: "var(--c-primary)" }}>{t.appName.split(" ")[0]}</span>
+            {t.appName.includes(" ") ? t.appName.split(" ").slice(1).join(" ") : "AI"}
           </span>
           {/* 4-Color Triage Dots: Crimson (Tier 1), Amber (Tier 2), Indigo (Tier 3), Emerald (Tier 4) */}
           <div
@@ -64,30 +80,88 @@ export const AppBar: React.FC<AppBarProps> = ({
         </div>
 
         <span className="hidden sm:inline-flex utsav-badge utsav-badge-ontrack ml-2">
-          Deterministic Engine
+          {t.deterministicEngine}
         </span>
       </div>
 
       {/* Center: Instant Search / Filter Input */}
       <div className="hidden md:flex flex-1 max-w-md mx-4">
-        <div className="relative w-full">
-          <Search
-            className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"
-            aria-hidden="true"
-          />
+        <div className="utsav-search-container">
+          <Search size={16} className="text-slate-400 shrink-0" aria-hidden="true" />
           <input
-            type="search"
+            id="global-search-input"
+            type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search categories, milestones, or vendor clauses..."
-            className="utsav-input pl-9 pr-3 py-1.5 text-xs rounded-lg"
+            onInput={(e) => onSearchChange((e.target as HTMLInputElement).value)}
+            placeholder={t.searchPlaceholder}
+            className="utsav-search-input"
             aria-label="Filter ledger items, milestones, and vendor clauses"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => onSearchChange("")}
+              className="text-slate-400 hover:text-slate-700 text-xs px-1.5 py-0.5 rounded font-bold cursor-pointer shrink-0"
+              aria-label="Clear search query"
+            >
+              ✕ Clear
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Right Controls: Role Lens Dropdown + 1-Click Judge Scenario Preset Selector */}
-      <div className="flex items-center gap-2.5">
+      {/* Right Controls: Language Selector + Role Lens Dropdown + Presets + Activity Log */}
+      <div className="flex items-center gap-2">
+        {/* Language Selector Dropdown */}
+        {onLanguageChange && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setLangMenuOpen((prev) => !prev);
+                setRoleMenuOpen(false);
+                setPresetMenuOpen(false);
+              }}
+              aria-haspopup="menu"
+              aria-expanded={langMenuOpen}
+              aria-label={`Select Language: currently ${currentLangLabel}`}
+              className="utsav-btn utsav-btn-secondary text-xs px-2.5 py-1.5 font-medium flex items-center gap-1.5"
+            >
+              <Globe className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
+              <span className="hidden sm:inline font-semibold text-slate-800">{currentLangLabel}</span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
+            </button>
+
+            {langMenuOpen && (
+              <div
+                role="menu"
+                aria-label="Select Language Menu"
+                className="absolute right-0 mt-1.5 w-44 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50 flex flex-col"
+              >
+                {languages.map((l) => (
+                  <button
+                    key={l.id}
+                    role="menuitem"
+                    onClick={() => {
+                      onLanguageChange(l.id);
+                      setLangMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors hover:bg-slate-50 ${
+                      language === l.id ? "bg-amber-50 font-semibold text-slate-900" : "text-slate-700"
+                    }`}
+                  >
+                    <span>{l.label}</span>
+                    {language === l.id && (
+                      <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" aria-hidden="true" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Role Lens Dropdown with role="menu" */}
         <div className="relative">
           <button
@@ -95,13 +169,14 @@ export const AppBar: React.FC<AppBarProps> = ({
             onClick={() => {
               setRoleMenuOpen((prev) => !prev);
               setPresetMenuOpen(false);
+              setLangMenuOpen(false);
             }}
             aria-haspopup="menu"
             aria-expanded={roleMenuOpen}
             aria-label={`Role Lens: ${currentRoleLabel}`}
             className="utsav-btn utsav-btn-secondary text-xs px-2.5 py-1.5 font-medium flex items-center gap-1.5"
           >
-            <span className="text-slate-500 font-normal">Lens:</span>
+            <span className="text-slate-500 font-normal">{t.roleLensLabel}:</span>
             <span className="font-semibold text-slate-800">{currentRoleLabel}</span>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
           </button>
@@ -110,7 +185,7 @@ export const AppBar: React.FC<AppBarProps> = ({
             <div
               role="menu"
               aria-label="Select Persona Lens"
-              className="absolute right-0 mt-1.5 w-60 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50 flex flex-col"
+              className="absolute right-0 mt-1.5 w-64 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50 flex flex-col"
             >
               {personas.map((p) => (
                 <button
@@ -121,7 +196,7 @@ export const AppBar: React.FC<AppBarProps> = ({
                     setRoleMenuOpen(false);
                   }}
                   className={`w-full text-left px-3 py-2 text-xs flex items-start justify-between transition-colors hover:bg-slate-50 ${
-                    currentPersona === p.id ? "bg-amber-50/60 font-semibold text-slate-900" : "text-slate-700"
+                    currentPersona === p.id ? "bg-amber-50 font-semibold text-slate-900" : "text-slate-700"
                   }`}
                 >
                   <div>
@@ -144,6 +219,7 @@ export const AppBar: React.FC<AppBarProps> = ({
             onClick={() => {
               setPresetMenuOpen((prev) => !prev);
               setRoleMenuOpen(false);
+              setLangMenuOpen(false);
             }}
             aria-haspopup="menu"
             aria-expanded={presetMenuOpen}
@@ -151,7 +227,7 @@ export const AppBar: React.FC<AppBarProps> = ({
             className="utsav-btn utsav-btn-primary text-xs px-3 py-1.5 font-semibold flex items-center gap-1.5 shadow-sm"
           >
             <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Judge Presets</span>
+            <span className="hidden sm:inline">{t.judgePresets}</span>
             <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
 
@@ -203,7 +279,7 @@ export const AppBar: React.FC<AppBarProps> = ({
             aria-label={`Activity Log and History (${activityCount} events recorded)`}
           >
             <Clock className="w-3.5 h-3.5 text-orange-400" aria-hidden="true" />
-            <span className="hidden sm:inline">Activity Log</span>
+            <span className="hidden sm:inline">{t.activityLog}</span>
             <span className="bg-orange-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold">
               {activityCount}
             </span>

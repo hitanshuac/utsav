@@ -183,10 +183,17 @@ export const SidebarStack: FC<SidebarStackProps> = ({
                 onDaysRemainingChange(Math.max(7, daysRemaining - 14));
               }
             }}
-            className="utsav-btn w-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold py-2 px-3 rounded-lg shadow-xs transition-colors flex items-center justify-center gap-1.5"
-            aria-label="Simulate Mid-Flight Shift (+50 Guests, -10% Budget, -14d)"
+            style={{
+              padding: "12px 16px",
+              width: "100%",
+              whiteSpace: "normal",
+              textAlign: "center",
+              lineHeight: 1.3
+            }}
+            className="utsav-btn bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+            aria-label="Run Stress Test (+50 Pax, -14d)"
           >
-            <span>⚡ Simulate Mid-Flight Shift (+50 Guests, -10% Budget, -14d)</span>
+            <span>⚡ Run Stress Test (+50 Pax, -14d)</span>
           </button>
         </div>
       </div>
@@ -194,19 +201,42 @@ export const SidebarStack: FC<SidebarStackProps> = ({
       {/* CARD 2: TRADE-OFF & BOTTLENECK RADAR */}
       <div className="utsav-card shadow-xs">
         <div className="utsav-card-header">
-          <h2 className="utsav-card-title flex items-center gap-2">
-            <Activity className="w-4 h-4 text-indigo-600" aria-hidden="true" />
-            <span>Trade-Off & Bottleneck Radar</span>
-          </h2>
-          <span className="text-xs font-mono font-bold text-slate-800">
-            Score: {urgencyScore}/100
-          </span>
+          <div>
+            <h2 className="utsav-card-title flex items-center gap-2">
+              <Activity className="w-4 h-4 text-indigo-600" aria-hidden="true" />
+              <span>Trade-Off & Bottleneck Radar</span>
+            </h2>
+            <span className="text-[10px] text-slate-500 block mt-0.5">
+              Continuous Risk & Feasibility Assessment
+            </span>
+          </div>
+          <div className="text-right">
+            <span className="text-xs font-mono font-bold text-slate-900 block">
+              Risk: {urgencyScore}/100
+            </span>
+            <span className="text-[10px] font-mono text-emerald-600 font-semibold block">
+              Optimal: 0/100
+            </span>
+          </div>
+        </div>
+
+        {/* Plain-Language Explainer Box */}
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 mb-3 text-[11px] text-slate-600 leading-snug">
+          <div className="flex items-center justify-between mb-1">
+            <strong className="text-slate-800">Understanding Triage Health:</strong>
+            <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">
+              0 = Best · 100 = High Risk
+            </span>
+          </div>
+          <p>
+            Unlike test scores, a <strong>lower score is optimal</strong>. <strong>0/100 (On-Track)</strong> means zero budget deficit and all milestones scheduled. Scores above 85 indicate critical overruns or blocked prerequisites requiring immediate trade-offs.
+          </p>
         </div>
 
         {/* Urgency Progress Track */}
         <div className="mb-4">
           <div className="flex justify-between items-center text-xs mb-1.5">
-            <span className="text-slate-500 font-medium">Triage Health Status</span>
+            <span className="text-slate-600 font-semibold">Triage Health Status</span>
             <span
               className={`px-2 py-0.5 rounded text-[11px] font-bold border uppercase ${tierColors[triageTier]}`}
             >
@@ -230,7 +260,14 @@ export const SidebarStack: FC<SidebarStackProps> = ({
               aria-valuemin={0}
               aria-valuemax={100}
               aria-label="Urgency Score Meter"
+              aria-valuetext={`Current risk score: ${urgencyScore} out of 100 (${triageTier.replace("_", " ")}). Optimal score is 0 out of 100 (On-Track).`}
             />
+          </div>
+          <div className="flex justify-between text-[10px] text-slate-400 font-mono mt-1">
+            <span className="text-emerald-700 font-bold">0 (Optimal: On-Track)</span>
+            <span>40 (Clarify)</span>
+            <span>65 (Bottleneck)</span>
+            <span className="text-rose-700 font-bold">100 (Critical)</span>
           </div>
         </div>
 

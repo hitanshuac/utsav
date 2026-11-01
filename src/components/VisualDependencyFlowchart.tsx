@@ -2,9 +2,7 @@ import React, { useState, useMemo } from "react";
 import {
   GitBranch,
   Lock,
-  Unlock,
   CheckCircle,
-  AlertTriangle,
   Clock,
   ArrowRight,
   Send,
@@ -12,7 +10,7 @@ import {
   Mail,
   Table as TableIcon,
   Layers,
-  Sparkles
+  ChevronRight
 } from "lucide-react";
 import { MilestoneTask } from "../types/planner";
 import { computeDelayCascade, DelayImpactSummary } from "../lib/engine/delay-cascade";
@@ -26,6 +24,7 @@ import {
   EdgeCaseTemplateType,
   logActivityEvent
 } from "../lib/services/event-logger";
+import { SupportedLanguage, TRANSLATIONS } from "../lib/i18n";
 
 interface VisualDependencyFlowchartProps {
   milestones: MilestoneTask[];
@@ -36,6 +35,7 @@ interface VisualDependencyFlowchartProps {
   onCycleTaskStatus: (taskId: string) => void;
   onUpdateTaskStatus?: (taskId: string, status: "pending" | "in_progress" | "completed") => void;
   onActionTriggered?: (actionName: string, details: string, deltas?: any[]) => void;
+  language?: SupportedLanguage;
 }
 
 interface StageColumn {
@@ -53,161 +53,162 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
   eventTitle,
   onCycleTaskStatus,
   onUpdateTaskStatus,
-  onActionTriggered
+  onActionTriggered,
+  language = "en"
 }) => {
-  const [viewMode, setViewMode] = useState<"flowchart" | "table">("flowchart");
-  const [selectedTaskId, setSelectedTaskId] = useState<string>(
-    bottlenecks[0] || topologicalOrder[0] || (milestones[0]?.id ?? "")
-  );
-
-  // Vendor outreach interactive state
-  const [activeTemplateType, setActiveTemplateType] = useState<EdgeCaseTemplateType>("standard");
-  const [activeChannel, setActiveChannel] = useState<"whatsapp" | "email">("whatsapp");
-  const [customSubject, setCustomSubject] = useState<string>("");
-  const [customBody, setCustomBody] = useState<string>("");
+  const t = TRANSLATIONS[language] || TRANSLATIONS.en;
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(milestones[0]?.id || null);
   const [activeDelayImpact, setActiveDelayImpact] = useState<DelayImpactSummary | null>(null);
+  const [activeChannel, setActiveChannel] = useState<"whatsapp" | "email">("whatsapp");
+  const [activeTemplateType, setActiveTemplateType] = useState<EdgeCaseTemplateType>("standard");
+  const [customBody, setCustomBody] = useState<string>("");
+  const [customSubject, setCustomSubject] = useState<string>("");
   const [dispatchFeedback, setDispatchFeedback] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"flowchart" | "table">("flowchart");
 
+  // Map of tasks for O(1) lookup
   const taskMap = useMemo(() => {
-    return new Map<string, MilestoneTask>(milestones.map((m) => [m.id, m]));
+    const map = new Map<string, MilestoneTask>();
+    milestones.forEach((m) => map.set(m.id, m));
+    return map;
   }, [milestones]);
 
-  const selectedTask = taskMap.get(selectedTaskId) || milestones[0];
+  // Selected task
+  const selectedTask = selectedTaskId ? taskMap.get(selectedTaskId) || null : null;
 
-  // Group milestones into 4 topological stages
+  // Topological Stages Partitioning (Kahn's DAG depth)
   const stages: StageColumn[] = useMemo(() => {
     const depthMap = new Map<string, number>();
 
-    // Calculate topological depth for each task in ordered sequence
-    for (const id of topologicalOrder) {
-      const task = taskMap.get(id);
-      if (!task) continue;
+    const getDepth = (id: string, visited: Set<string> = new Set()): number => {
+      if (depthMap.has(id)) return depthMap.get(id)!;
+      if (visited.has(id)) return 0;
+      visited.add(id);
 
-      if (!task.dependsOn || task.dependsOn.length === 0) {
+      const task = taskMap.get(id);
+      if (!task || task.dependsOn.length === 0) {
         depthMap.set(id, 0);
-      } else {
-        let maxParentDepth = 0;
-        for (const pId of task.dependsOn) {
-          const pDepth = depthMap.get(pId) ?? 0;
-          if (pDepth > maxParentDepth) maxParentDepth = pDepth;
-        }
-        depthMap.set(id, maxParentDepth + 1);
+        return 0;
       }
-    }
 
-    const s1Tasks: MilestoneTask[] = [];
-    const s2Tasks: MilestoneTask[] = [];
-    const s3Tasks: MilestoneTask[] = [];
-    const s4Tasks: MilestoneTask[] = [];
-
-    for (const id of topologicalOrder) {
-      const task = taskMap.get(id);
-      if (!task) continue;
-      const depth = depthMap.get(id) ?? 0;
-
-      if (depth === 0) {
-        s1Tasks.push(task);
-      } else if (depth === 1) {
-        s2Tasks.push(task);
-      } else if (depth === 2) {
-        s3Tasks.push(task);
-      } else {
-        s4Tasks.push(task);
+      let maxParentDepth = 0;
+      for (const pId of task.dependsOn) {
+        maxParentDepth = Math.max(maxParentDepth, getDepth(pId, new Set(visited)) + 1);
       }
-    }
+      depthMap.set(id, maxParentDepth);
+      return maxParentDepth;
+    };
+
+    milestones.forEach((m) => getDepth(m.id));
+
+    const s0: MilestoneTask[] = [];
+    const s1: MilestoneTask[] = [];
+    const s2: MilestoneTask[] = [];
+    const s3: MilestoneTask[] = [];
+
+    milestones.forEach((m) => {
+      const d = depthMap.get(m.id) || 0;
+      if (d === 0) s0.push(m);
+      else if (d === 1) s1.push(m);
+      else if (d === 2) s2.push(m);
+      else s3.push(m);
+    });
 
     return [
       {
         stageNumber: 1,
-        title: "Stage 1: Foundation",
+        title: "STAGE 1: FOUNDATION",
         subtitle: "Venue & Prerequisites",
-        tasks: s1Tasks
+        tasks: s0
       },
       {
         stageNumber: 2,
-        title: "Stage 2: Core Experience",
+        title: "STAGE 2: CORE EXPERIENCE",
         subtitle: "Catering, Decor & AV",
-        tasks: s2Tasks
+        tasks: s1
       },
       {
         stageNumber: 3,
-        title: "Stage 3: Crew & Logistics",
+        title: "STAGE 3: CREW & LOGISTICS",
         subtitle: "Technical & Soundcheck",
-        tasks: s3Tasks
+        tasks: s2
       },
       {
         stageNumber: 4,
-        title: "Stage 4: Execution",
+        title: "STAGE 4: EXECUTION",
         subtitle: "Auspicious Handover",
-        tasks: s4Tasks
+        tasks: s3
       }
     ];
-  }, [milestones, topologicalOrder, taskMap]);
+  }, [milestones, taskMap]);
 
-  // Sync editable template when selected task or template type changes
+  // Synchronize message body when selected task or template changes
   React.useEffect(() => {
-    if (selectedTask) {
-      const tpl = buildEditableTemplate(selectedTask, activeChannel, activeTemplateType, eventTitle);
-      setCustomSubject(tpl.subject);
-      setCustomBody(tpl.body);
-      setDispatchFeedback(null);
-    }
-  }, [selectedTaskId, activeChannel, activeTemplateType, eventTitle]);
+    if (!selectedTask) return;
+
+    const template = buildEditableTemplate(
+      selectedTask,
+      activeChannel,
+      activeTemplateType,
+      eventTitle
+    );
+
+    setCustomBody(template.body);
+    setCustomSubject(template.subject);
+  }, [selectedTaskId, activeTemplateType, activeChannel, selectedTask, eventTitle]);
 
   const handleSelectNode = (taskId: string) => {
     setSelectedTaskId(taskId);
     setActiveDelayImpact(null);
     setDispatchFeedback(null);
+
+    const task = taskMap.get(taskId);
+    if (task) {
+      logActivityEvent({
+        taskId: task.id,
+        taskTitle: `Inspected Node: ${task.title}`,
+        category: task.category,
+        channel: "system",
+        vendorName: task.vendorContact?.name || "Deterministic Engine",
+        recipient: "Coordinator Ops",
+        summary: `Inspected milestone ${task.id.toUpperCase()}: "${task.title}". Status: ${task.status}. Lead time: ${task.leadTimeDays || task.deadlineDaysBeforeEvent}d.`,
+        loopStatus: "closed"
+      });
+    }
   };
 
   const handleStatusChange = (status: "pending" | "in_progress" | "completed") => {
-    if (!selectedTask) return;
+    if (!selectedTaskId) return;
     if (onUpdateTaskStatus) {
-      onUpdateTaskStatus(selectedTask.id, status);
+      onUpdateTaskStatus(selectedTaskId, status);
     } else {
-      onCycleTaskStatus(selectedTask.id);
-    }
-
-    if (onActionTriggered) {
-      onActionTriggered(
-        `Updated Task Status: ${selectedTask.title}`,
-        `Changed status from '${selectedTask.status}' to '${status}'. Any dependent downstream tasks are dynamically evaluated.`,
-        [
-          {
-            label: `Task (${selectedTask.id})`,
-            before: selectedTask.status,
-            after: status,
-            diff: status === "completed" ? "Unlocked Downstream" : "In Progress"
-          }
-        ]
-      );
+      onCycleTaskStatus(selectedTaskId);
     }
   };
 
   const handleSimulateDelay = (minutes: number) => {
-    if (!selectedTask) return;
-    const impact = computeDelayCascade(milestones, selectedTask.id, minutes);
+    if (!selectedTaskId) return;
+    const impact = computeDelayCascade(milestones, selectedTaskId, minutes);
     setActiveDelayImpact(impact);
 
     logActivityEvent({
-      taskId: selectedTask.id,
-      taskTitle: selectedTask.title,
-      category: selectedTask.category,
+      taskId: selectedTaskId,
+      taskTitle: `Simulated +${minutes}m Delay Cascade`,
+      category: selectedTask?.category || "logistics",
       channel: "system",
-      vendorName: selectedTask.vendorContact?.name || "Deterministic Engine",
-      recipient: "Coordinator Ops",
-      summary: `Simulated +${minutes}m delay cascade on '${selectedTask.title}'. Impacted ${impact.downstreamAffectedTasks.length} downstream milestones.`,
+      vendorName: selectedTask?.vendorContact?.name || "Deterministic Engine",
+      recipient: "Operations Bridge",
+      summary: `Simulated +${minutes}m delay on ${selectedTaskId.toUpperCase()}: ${impact.downstreamAffectedTasks.length} downstream tasks affected. ${impact.criticalMuhuratAtRisk ? "CRITICAL MUHURAT AT RISK." : "Buffer absorbed delay."}`,
       loopStatus: "closed"
     });
 
-    if (onActionTriggered) {
+    if (onActionTriggered && selectedTask) {
       onActionTriggered(
-        `Delay Cascade (+${minutes}m): ${selectedTask.title}`,
-        impact.riskMessage ||
-          `Computed downstream impact across Kahn's DAG: ${impact.downstreamAffectedTasks.length} tasks shifted by +${minutes} minutes.`,
+        `⚡ Simulated +${minutes}m Delay Cascade`,
+        impact.riskMessage || `Simulated +${minutes}m delay.`,
         [
           {
-            label: "Delay Applied",
+            label: "Delay Added",
             before: "0 mins",
             after: `+${minutes} mins`,
             diff: `+${minutes}m`
@@ -216,13 +217,13 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
             label: "Downstream Tasks Impacted",
             before: "0",
             after: `${impact.downstreamAffectedTasks.length}`,
-            diff: `${impact.downstreamAffectedTasks.length} affected`
+            diff: `${impact.downstreamAffectedTasks.length} tasks`
           },
           {
-            label: "Muhurat Timing Risk",
-            before: "Safe",
-            after: impact.criticalMuhuratAtRisk ? "HIGH RISK" : "Normal",
-            isImprovement: !impact.criticalMuhuratAtRisk
+            label: "Muhurat Schedule",
+            before: "On-Track",
+            after: impact.criticalMuhuratAtRisk ? "AT RISK (Dinner delayed)" : "Safe (Buffer Absorbed)",
+            diff: impact.criticalMuhuratAtRisk ? "Delayed" : "Safe"
           }
         ]
       );
@@ -232,56 +233,58 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
   const handleDispatch = () => {
     if (!selectedTask) return;
 
+    const vendorPhone = selectedTask.vendorContact?.phone || "+919876543210";
+    const vendorEmail = resolveThirdPartyVendorEmail(selectedTask.vendorContact);
+    const vendorName = selectedTask.vendorContact?.name || "Assigned Partner";
+
     if (activeChannel === "whatsapp") {
-      const phone = selectedTask.vendorContact?.phone || "+91 98101 23456";
-      const result = triggerWhatsAppNotification({
+      triggerWhatsAppNotification({
         taskId: selectedTask.id,
         taskTitle: selectedTask.title,
         category: selectedTask.category,
-        phone,
-        vendorName: selectedTask.vendorContact?.name || "Vendor Partner",
-        message: customBody,
-        edgeCaseType: activeTemplateType
+        phone: vendorPhone,
+        vendorName,
+        message: customBody
       });
-
-      setDispatchFeedback(`✓ WhatsApp dispatched to ${result.vendorName} (${phone}). Added to Activity History Log with 'awaiting_call' loop status.`);
-      if (result.actionUrl) {
-        window.open(result.actionUrl, "_blank", "noopener,noreferrer");
-      }
+      setDispatchFeedback(`Dispatched WhatsApp template to ${vendorName} (${vendorPhone}).`);
     } else {
-      const vendorEmail = resolveThirdPartyVendorEmail(selectedTask.vendorContact, selectedTask.category);
-      const isThirdParty = selectedTask.vendorContact?.role !== "Family Host" && selectedTask.vendorContact?.role !== "Managing Lead";
-
-      const result = triggerEmailNotification({
+      triggerEmailNotification({
         taskId: selectedTask.id,
         taskTitle: selectedTask.title,
         category: selectedTask.category,
         to: vendorEmail,
-        vendorName: selectedTask.vendorContact?.name || "3rd-Party Partner",
+        vendorName,
         subject: customSubject,
-        body: customBody,
-        isThirdParty,
-        edgeCaseType: activeTemplateType
+        body: customBody
       });
-
-      if (!result.ok) {
-        setDispatchFeedback(`⚠️ Disallowed: ${result.reason}`);
-      } else {
-        setDispatchFeedback(`✓ 3rd-party vendor email dispatched to ${result.recipient}. Logged in Activity History with 'awaiting_call' loop status.`);
-        if (result.actionUrl) {
-          window.open(result.actionUrl, "_blank");
-        }
-      }
+      setDispatchFeedback(`Dispatched RFC 5322 Email template to ${vendorName} (${vendorEmail}).`);
     }
+
+    logActivityEvent({
+      taskId: selectedTask.id,
+      taskTitle: `Vendor Communication: ${selectedTask.title}`,
+      category: selectedTask.category,
+      channel: activeChannel,
+      vendorName,
+      recipient: activeChannel === "whatsapp" ? vendorPhone : vendorEmail,
+      summary: `Dispatched ${activeTemplateType} template via ${activeChannel.toUpperCase()} to ${vendorName}: "${customBody.slice(0, 80)}..."`,
+      loopStatus: "closed"
+    });
 
     if (onActionTriggered) {
       onActionTriggered(
-        `Dispatched Vendor Outreach (${activeChannel.toUpperCase()}): ${selectedTask.title}`,
-        `Transmitted '${activeTemplateType}' template to ${selectedTask.vendorContact?.name || "Vendor"}. Open loop awaiting confirmation call.`,
+        `Dispatched Vendor Outreach (${activeChannel.toUpperCase()})`,
+        `Negotiation message sent to ${vendorName}. Immutable activity event logged.`,
         [
           {
-            label: "Communication Channel",
-            before: "None",
+            label: "Recipient",
+            before: "—",
+            after: `${vendorName} (${activeChannel === "whatsapp" ? vendorPhone : vendorEmail})`,
+            diff: "Contacted"
+          },
+          {
+            label: "Channel",
+            before: "Draft",
             after: activeChannel.toUpperCase(),
             diff: "Sent"
           },
@@ -296,6 +299,11 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
     }
   };
 
+  // Find downstream tasks that depend on a given task
+  const getDownstreamTasks = (taskId: string): MilestoneTask[] => {
+    return milestones.filter((m) => m.dependsOn.includes(taskId));
+  };
+
   return (
     <section aria-labelledby="visual-flowchart-title" className="utsav-card">
       {/* Header with View Toggle */}
@@ -303,9 +311,9 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
         <div>
           <h2 id="visual-flowchart-title" className="utsav-card-title flex items-center gap-2">
             <GitBranch className="w-5 h-5 text-indigo-600" aria-hidden="true" />
-            <span>Interactive Visual Dependency Flowchart</span>
+            <span>{t.flowchartTitle}</span>
             <span className="text-xs font-normal text-slate-500 font-mono">
-              (Kahn&apos;s DAG Topological Stages)
+              ({t.flowchartKahnDag})
             </span>
           </h2>
         </div>
@@ -316,7 +324,7 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
             <button
               type="button"
               onClick={() => setViewMode("flowchart")}
-              className={`text-xs px-2.5 py-1 rounded-md font-semibold flex items-center gap-1.5 transition-colors ${
+              className={`text-xs px-2.5 py-1 rounded-md font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
                 viewMode === "flowchart"
                   ? "bg-white text-slate-900 shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
@@ -328,7 +336,7 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
             <button
               type="button"
               onClick={() => setViewMode("table")}
-              className={`text-xs px-2.5 py-1 rounded-md font-semibold flex items-center gap-1.5 transition-colors ${
+              className={`text-xs px-2.5 py-1 rounded-md font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
                 viewMode === "table"
                   ? "bg-white text-slate-900 shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
@@ -347,9 +355,47 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
         </div>
       </div>
 
-      <p className="text-xs text-slate-600 mb-4 leading-relaxed">
-        Click any node to inspect prerequisite locks, trigger a <strong>+30m Delay Cascade</strong>, or dispatch vendor notifications via WhatsApp/Email. Blocked critical-path tasks pulse in flashing red.
+      <p className="text-xs text-slate-600 mb-3 leading-relaxed">
+        {t.flowchartSubtitle}
       </p>
+
+      {/* OVERARCHING STAGE PROGRESSION TRACK (VISUAL CONNECTIVITY PIPELINE) */}
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 mb-4 overflow-x-auto">
+        <div className="flex items-center justify-between min-w-[620px] gap-2">
+          {stages.map((stage, idx) => {
+            const allCompleted = stage.tasks.length > 0 && stage.tasks.every((t) => t.status === "completed");
+            const hasBlocked = stage.tasks.some((t) => bottlenecks.includes(t.id));
+            return (
+              <React.Fragment key={stage.stageNumber}>
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <span
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                      allCompleted
+                        ? "bg-emerald-600 text-white"
+                        : hasBlocked
+                        ? "bg-red-600 text-white critical-pulse-dot"
+                        : "bg-indigo-600 text-white"
+                    }`}
+                  >
+                    {allCompleted ? "✓" : stage.stageNumber}
+                  </span>
+                  <div className="truncate">
+                    <span className="text-[11px] font-bold text-slate-800 block truncate">
+                      {stage.title.replace(/^STAGE \d+:\s*/, "")}
+                    </span>
+                    <span className="text-[9px] text-slate-500 block truncate font-mono">
+                      {stage.tasks.length} task(s) · {stage.subtitle}
+                    </span>
+                  </div>
+                </div>
+                {idx < stages.length - 1 && (
+                  <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 mx-1" aria-hidden="true" />
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+      </div>
 
       {/* VIEW 1: INTERACTIVE VISUAL FLOWCHART */}
       {viewMode === "flowchart" && (
@@ -359,7 +405,7 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
             {stages.map((stage) => (
               <div
                 key={stage.stageNumber}
-                className="bg-slate-50/70 border border-slate-200 rounded-xl p-3 flex flex-col gap-2.5 min-w-[220px]"
+                className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col gap-2.5 min-w-[220px]"
               >
                 {/* Stage Header */}
                 <div className="border-b border-slate-200 pb-2">
@@ -375,7 +421,7 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                 </div>
 
                 {/* Nodes in this Stage */}
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2 flex-1">
                   {stage.tasks.length === 0 ? (
                     <div className="text-[11px] text-slate-400 py-3 text-center italic">
                       No milestones in this tier
@@ -384,15 +430,18 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                     stage.tasks.map((task) => {
                       const isSelected = selectedTaskId === task.id;
                       const isBottleneck = bottlenecks.includes(task.id);
-                      const isCriticalPathAlert =
-                        (isBottleneck ||
-                          (task.urgency === "critical" && task.status !== "completed") ||
-                          ((task.leadTimeDays ?? task.deadlineDaysBeforeEvent) > daysRemaining && task.status !== "completed"));
-
                       const hasUncompletedPrereq = task.dependsOn.some((pId) => {
                         const parent = taskMap.get(pId);
                         return parent && parent.status !== "completed";
                       });
+
+                      const isCriticalPathAlert =
+                        isBottleneck ||
+                        hasUncompletedPrereq ||
+                        (task.urgency === "critical" && task.status !== "completed") ||
+                        ((task.leadTimeDays ?? task.deadlineDaysBeforeEvent) > daysRemaining && task.status !== "completed");
+
+                      const downstream = getDownstreamTasks(task.id);
 
                       return (
                         <div
@@ -404,10 +453,10 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                             if (e.key === "Enter" || e.key === " ") handleSelectNode(task.id);
                           }}
                           className={`cursor-pointer rounded-xl p-3 border transition-all text-left shadow-xs ${
-                            isSelected
-                              ? "border-indigo-600 bg-white ring-2 ring-indigo-500/20"
-                              : isCriticalPathAlert
-                              ? "critical-flash-card"
+                            isCriticalPathAlert
+                              ? `critical-flash-card ${isSelected ? "ring-2 ring-red-600" : ""}`
+                              : isSelected
+                              ? "border-indigo-600 bg-white ring-2 ring-indigo-600"
                               : "bg-white border-slate-200 hover:border-slate-300"
                           }`}
                         >
@@ -416,7 +465,7 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                               {isCriticalPathAlert && (
                                 <span className="critical-pulse-dot shrink-0" aria-hidden="true" />
                               )}
-                              <span className="text-[10px] font-mono font-bold text-slate-400">
+                              <span className="text-[10px] font-mono font-bold text-slate-500">
                                 {task.id.toUpperCase()}
                               </span>
                               <span className="text-[9px] uppercase px-1.5 py-0.2 rounded font-semibold bg-slate-100 text-slate-600">
@@ -427,10 +476,10 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                             <span
                               className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase ${
                                 task.status === "completed"
-                                  ? "bg-emerald-100 text-emerald-800"
+                                  ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
                                   : task.status === "in_progress"
-                                  ? "bg-amber-100 text-amber-800"
-                                  : "bg-slate-100 text-slate-700"
+                                  ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                  : "bg-slate-100 text-slate-700 border border-slate-200"
                               }`}
                             >
                               {task.status.replace("_", " ")}
@@ -444,10 +493,51 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                           <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono mt-1">
                             <span>Lead: {task.leadTimeDays || task.deadlineDaysBeforeEvent}d</span>
                             {hasUncompletedPrereq && (
-                              <span className="text-amber-700 flex items-center gap-0.5 font-sans font-medium">
+                              <span className="text-red-700 flex items-center gap-0.5 font-sans font-bold">
                                 <Lock className="w-2.5 h-2.5" />
-                                <span>Prereq</span>
+                                <span>Blocked</span>
                               </span>
+                            )}
+                          </div>
+
+                          {/* Explicit Visual Dependency Badges */}
+                          <div className="mt-2 pt-1.5 border-t border-slate-100 flex flex-col gap-1 text-[9px] font-mono">
+                            {task.dependsOn.length > 0 ? (
+                              <div className="flex items-center gap-1 text-slate-600">
+                                <span className="text-slate-400">Requires:</span>
+                                {task.dependsOn.map((pId) => {
+                                  const pTask = taskMap.get(pId);
+                                  const isPrereqDone = pTask?.status === "completed";
+                                  return (
+                                    <span
+                                      key={pId}
+                                      className={`px-1 rounded font-bold ${
+                                        isPrereqDone
+                                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                          : "bg-red-50 text-red-700 border border-red-300"
+                                      }`}
+                                    >
+                                      {pId.toUpperCase()} {isPrereqDone ? "✓" : "🔒"}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="text-slate-400">Root Milestone (No Prereqs)</div>
+                            )}
+
+                            {downstream.length > 0 && (
+                              <div className="flex items-center gap-1 text-indigo-700">
+                                <span className="text-slate-400">Unlocks:</span>
+                                {downstream.map((d) => (
+                                  <span
+                                    key={d.id}
+                                    className="bg-indigo-50 text-indigo-700 border border-indigo-200 px-1 rounded font-bold"
+                                  >
+                                    {d.id.toUpperCase()} →
+                                  </span>
+                                ))}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -459,17 +549,7 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
             ))}
           </div>
 
-          {/* SVG Arrow Connectors Hint */}
-          <div className="flex items-center justify-center gap-4 text-[11px] font-mono text-slate-500 py-1 border-y border-slate-100">
-            <span className="flex items-center gap-1">
-              <span className="w-6 h-0.5 bg-slate-400 inline-block" />
-              <span>Normal Topological Flow</span>
-            </span>
-            <span className="flex items-center gap-1 text-rose-600 font-semibold">
-              <span className="w-6 h-0.5 border-t-2 border-dashed border-rose-600 inline-block" />
-              <span>Critical Blocked Path</span>
-            </span>
-          </div>
+
 
           {/* INTERACTIVE NODE INSPECTION & EXECUTION PANEL */}
           {selectedTask && (
@@ -485,26 +565,21 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                       Category: {selectedTask.category}
                     </span>
                   </div>
-                  <div className="text-xs text-slate-500 flex items-center gap-3">
-                    <span>
-                      Lead Time: <strong>{selectedTask.leadTimeDays || selectedTask.deadlineDaysBeforeEvent} days</strong>
-                    </span>
-                    <span>
-                      Vendor: <strong>{selectedTask.vendorContact?.name || "Assigned Partner"}</strong> (
-                      {selectedTask.vendorContact?.role || "Vendor Lead"})
-                    </span>
+                  <div className="text-xs text-slate-500 font-mono">
+                    Lead Time: <strong>{selectedTask.leadTimeDays || selectedTask.deadlineDaysBeforeEvent} days</strong> ·
+                    Vendor: <strong>{selectedTask.vendorContact?.name || "Assigned Partner"}</strong>
                   </div>
                 </div>
 
-                {/* Status Toggle Actions */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-xs text-slate-500 mr-1 font-medium">Status:</span>
+                {/* Status Toggle Switcher */}
+                <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl p-1 shadow-xs">
+                  <span className="text-[11px] font-semibold text-slate-500 px-2">Status:</span>
                   {(["pending", "in_progress", "completed"] as const).map((st) => (
                     <button
                       key={st}
                       type="button"
                       onClick={() => handleStatusChange(st)}
-                      className={`text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors capitalize ${
+                      className={`text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors capitalize cursor-pointer ${
                         selectedTask.status === st
                           ? st === "completed"
                             ? "bg-emerald-600 text-white shadow-xs"
@@ -520,15 +595,15 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                 </div>
               </div>
 
-              {/* Sub-Panels: Delay Cascade & Vendor Outreach */}
+              {/* Sub-Panels: Delay Cascade & Vendor Outreach (Clean Roomy Layout) */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Left: Delay Cascade Simulator */}
-                <div className="bg-white border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between">
+                <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col justify-between shadow-xs">
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
                         <Clock className="w-3.5 h-3.5 text-orange-600" aria-hidden="true" />
-                        <span>Downstream Delay Cascade Simulator</span>
+                        <span>{t.flowchartDelayCascade}</span>
                       </h4>
                       <span className="text-[10px] font-mono text-slate-400">BFS Graph Traversal</span>
                     </div>
@@ -537,26 +612,27 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                       Simulate ceremony delays on this node to forecast downstream impact on Muhurat rituals and dinner schedules.
                     </p>
 
-                    <div className="flex items-center gap-2 mb-3">
+                    {/* Delay Buttons with Responsive Grid and No Overflow */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                       <button
                         type="button"
                         onClick={() => handleSimulateDelay(30)}
-                        className="utsav-btn bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-xs px-3 py-1.5 font-semibold"
+                        className="utsav-btn bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-xs px-3 py-2 font-semibold text-center whitespace-normal leading-tight shadow-xs cursor-pointer"
                       >
-                        ⚡ Simulate +30m Delay Cascade
+                        {t.flowchartSimulate30m}
                       </button>
                       <button
                         type="button"
                         onClick={() => handleSimulateDelay(60)}
-                        className="utsav-btn bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-900 text-xs px-3 py-1.5 font-semibold"
+                        className="utsav-btn bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-900 text-xs px-3 py-2 font-semibold text-center whitespace-normal leading-tight shadow-xs cursor-pointer"
                       >
-                        ⚡ Simulate +60m Delay Cascade
+                        {t.flowchartSimulate60m}
                       </button>
                     </div>
 
                     {/* Delay Impact Output */}
                     {activeDelayImpact && (
-                      <div className="bg-amber-50/50 border border-amber-200 rounded-lg p-3 text-xs space-y-1.5">
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs space-y-1.5">
                         <div className="flex items-center justify-between">
                           <strong className="text-amber-900 font-bold">
                             Cascade Results (+{activeDelayImpact.delayMinutes} mins):
@@ -580,18 +656,18 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                 </div>
 
                 {/* Right: Vendor Communication & 4 Editable Templates */}
-                <div className="bg-white border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between">
+                <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col justify-between shadow-xs">
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
                         <Send className="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />
-                        <span>Vendor Outreach &amp; Edge-Case Templates</span>
+                        <span>{t.flowchartVendorOutreach}</span>
                       </h4>
                       <div className="flex items-center gap-1 text-[11px]">
                         <button
                           type="button"
                           onClick={() => setActiveChannel("whatsapp")}
-                          className={`px-2 py-0.5 rounded font-semibold ${
+                          className={`px-2 py-0.5 rounded font-semibold cursor-pointer ${
                             activeChannel === "whatsapp"
                               ? "bg-emerald-600 text-white"
                               : "text-slate-600 hover:bg-slate-100"
@@ -602,7 +678,7 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                         <button
                           type="button"
                           onClick={() => setActiveChannel("email")}
-                          className={`px-2 py-0.5 rounded font-semibold ${
+                          className={`px-2 py-0.5 rounded font-semibold cursor-pointer ${
                             activeChannel === "email"
                               ? "bg-blue-600 text-white"
                               : "text-slate-600 hover:bg-slate-100"
@@ -613,25 +689,25 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                       </div>
                     </div>
 
-                    {/* 4 Template Buttons */}
-                    <div className="flex gap-1 flex-wrap mb-2.5">
+                    {/* 4 Template Buttons with Clean Wrapping */}
+                    <div className="flex gap-1.5 flex-wrap mb-2.5">
                       {[
                         { id: "standard" as const, label: "Standard Lock" },
                         { id: "delay_30m" as const, label: "+30m Delay" },
                         { id: "budget_surge" as const, label: "+15% Surge Buffer" },
                         { id: "backup_sos" as const, label: "Emergency SOS" }
-                      ].map((t) => (
+                      ].map((tmpl) => (
                         <button
-                          key={t.id}
+                          key={tmpl.id}
                           type="button"
-                          onClick={() => setActiveTemplateType(t.id)}
-                          className={`text-[10px] px-2 py-1 rounded font-medium transition-colors ${
-                            activeTemplateType === t.id
+                          onClick={() => setActiveTemplateType(tmpl.id)}
+                          className={`text-[10px] px-2 py-1 rounded font-medium transition-colors cursor-pointer ${
+                            activeTemplateType === tmpl.id
                               ? "bg-slate-900 text-white font-semibold"
                               : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                           }`}
                         >
-                          {t.label}
+                          {tmpl.label}
                         </button>
                       ))}
                     </div>
@@ -667,14 +743,14 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                     <button
                       type="button"
                       onClick={handleDispatch}
-                      className={`utsav-btn text-xs px-3.5 py-1.5 font-semibold text-white shadow-xs flex items-center gap-1.5 ${
+                      className={`utsav-btn text-xs px-3.5 py-2 font-semibold text-white shadow-xs flex items-center gap-1.5 cursor-pointer ${
                         activeChannel === "whatsapp" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700"
                       }`}
                     >
                       {activeChannel === "whatsapp" ? (
                         <>
                           <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />
-                          <span>Dispatch via WhatsApp</span>
+                          <span>{t.flowchartDispatchWhatsapp}</span>
                         </>
                       ) : (
                         <>
@@ -719,7 +795,7 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                   <tr
                     key={task.id}
                     className={`hover:bg-slate-50 transition-colors ${
-                      isBottleneck ? "bg-amber-50/40" : ""
+                      isBottleneck ? "bg-amber-50" : ""
                     }`}
                   >
                     <td className="py-2.5 px-3 font-mono font-bold text-slate-500">{idx + 1}</td>
@@ -750,7 +826,7 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                       <button
                         type="button"
                         onClick={() => onCycleTaskStatus(task.id)}
-                        className={`utsav-btn text-xs px-2.5 py-1 font-semibold ${
+                        className={`utsav-btn text-xs px-2.5 py-1 font-semibold cursor-pointer ${
                           task.status === "completed"
                             ? "utsav-badge-ontrack border-emerald-300"
                             : task.status === "in_progress"
@@ -760,7 +836,7 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                       >
                         {task.status === "completed" && <CheckCircle className="w-3 h-3" />}
                         {task.status === "pending" && hasUncompletedPrereq && (
-                          <Lock className="w-3 h-3 text-amber-600" />
+                          <Lock className="w-3 h-3 text-red-600" />
                         )}
                         <span className="capitalize">{task.status.replace("_", " ")}</span>
                       </button>

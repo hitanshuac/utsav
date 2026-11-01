@@ -396,7 +396,7 @@ const PORT = Number(process.env.APP_PORT || process.env.PORT) || 3000;
 export async function startServer() {
   const distPath = path.join(__dirname, "dist");
   const distAssetsPath = path.join(distPath, "assets");
-  if (fs.existsSync(distAssetsPath)) {
+  if (process.env.NODE_ENV === "production" && fs.existsSync(distAssetsPath)) {
     app.use("/assets", express.static(distAssetsPath, { maxAge: "1d" }));
   }
 

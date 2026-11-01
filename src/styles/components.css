@@ -135,7 +135,57 @@
   cursor: pointer;
 }
 
-/* Form Inputs & Textarea */
+/* Form Inputs, Select & Search */
+.utsav-search-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-surface-card);
+  width: 100%;
+}
+
+.utsav-search-container:focus-within {
+  border-color: var(--c-primary);
+  outline: 2px solid var(--c-primary);
+  outline-offset: 1px;
+}
+
+.utsav-search-input {
+  border: none !important;
+  background: transparent !important;
+  outline: none !important;
+  width: 100%;
+  font-size: 0.8125rem;
+  color: var(--c-text);
+  padding: 0 !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+}
+
+select,
+select.utsav-input,
+.utsav-select {
+  padding: 8px 32px 8px 12px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+}
+
+.utsav-r2-tabbar {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+  overflow: hidden !important;
+}
+
+.utsav-r2-tabbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 .utsav-input {
   width: 100%;
   padding: 0.625rem 0.875rem;
@@ -201,12 +251,29 @@
 /* Solid-Hex Flashing Crimson Red Critical Highlights (Zero rgba, Zero blur) */
 @keyframes criticalBorderFlash {
   0%, 100% {
-    border-color: #DC2626;
-    background-color: #FEF2F2;
+    border-color: #DC2626 !important;
+    background-color: #FEF2F2 !important;
+    box-shadow: 0 0 0 2px #DC2626;
   }
   50% {
-    border-color: #F87171;
-    background-color: #FEE2E2;
+    border-color: #991B1B !important;
+    background-color: #FEE2E2 !important;
+    box-shadow: 0 0 0 4px #F87171;
+  }
+}
+
+@keyframes criticalBtnStrobe {
+  0%, 100% {
+    background-color: #DC2626 !important;
+    color: #FFFFFF !important;
+    border-color: #B91C1C !important;
+    box-shadow: 0 0 0 2px #FECACA;
+  }
+  50% {
+    background-color: #991B1B !important;
+    color: #FEF2F2 !important;
+    border-color: #7F1D1D !important;
+    box-shadow: 0 0 0 4px #F87171;
   }
 }
 
@@ -214,17 +281,24 @@
   0%, 100% {
     transform: scale(1);
     background-color: #DC2626;
+    box-shadow: 0 0 0 2px #FECACA;
   }
   50% {
-    transform: scale(1.35);
+    transform: scale(1.4);
     background-color: #991B1B;
+    box-shadow: 0 0 0 4px #DC2626;
   }
 }
 
 .critical-flash-card {
   border: 2px solid #DC2626 !important;
   background-color: #FEF2F2 !important;
-  animation: criticalBorderFlash 1.6s infinite ease-in-out;
+  animation: criticalBorderFlash 1.4s infinite ease-in-out;
+}
+
+.critical-strobe-btn {
+  animation: criticalBtnStrobe 1.2s infinite ease-in-out;
+  cursor: pointer;
 }
 
 .critical-pulse-dot {

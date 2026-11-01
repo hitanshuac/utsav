@@ -1,6 +1,7 @@
 import React from "react";
-import { RotateCcw, Calendar, CheckCircle2, Sparkles } from "lucide-react";
+import { RotateCcw, Calendar, Sparkles, Info } from "lucide-react";
 import { PlanningTriageTier } from "../types/planner";
+import { SupportedLanguage, TRANSLATIONS } from "../lib/i18n";
 
 interface PageHeaderProps {
   eventTitle: string;
@@ -12,6 +13,7 @@ interface PageHeaderProps {
   onResetPreset: () => void;
   onExportIcs: () => void;
   onOpenCustomEvent: () => void;
+  language?: SupportedLanguage;
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
@@ -23,8 +25,11 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   urgencyScore,
   onResetPreset,
   onExportIcs,
-  onOpenCustomEvent
+  onOpenCustomEvent,
+  language = "en"
 }) => {
+  const t = TRANSLATIONS[language] || TRANSLATIONS.en;
+
   const tierBadges: Record<
     PlanningTriageTier,
     { label: string; className: string }
@@ -50,57 +55,62 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   const badge = tierBadges[triageTier] || tierBadges.ON_TRACK;
 
   return (
-    <section className="utsav-r3-header" aria-label="Event Header and Actions">
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight m-0">
-            {eventTitle}
-          </h1>
-          <span className={`utsav-badge ${badge.className}`}>{badge.label}</span>
+    <section className="utsav-r3-header flex-col items-start gap-3" aria-label="Event Header and Actions">
+      <div className="w-full flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight m-0">
+              {eventTitle}
+            </h1>
+            <span className={`utsav-badge ${badge.className}`}>{badge.label}</span>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-500 font-mono m-0 tabular-nums">
+            Target Date: <strong className="text-slate-700">{eventDate}</strong> ·{" "}
+            <strong className="text-slate-700">{daysRemaining} {t.daysOut}</strong> ·{" "}
+            <strong className="text-slate-700">{guestCount} {t.confirmedGuests}</strong>
+          </p>
         </div>
-        <p className="text-xs sm:text-sm text-slate-500 font-mono m-0 tabular-nums">
-          Target Date: <strong className="text-slate-700">{eventDate}</strong> ·{" "}
-          <strong className="text-slate-700">{daysRemaining} Days Out</strong> ·{" "}
-          <strong className="text-slate-700">{guestCount} Confirmed Guests</strong>
-        </p>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            id="open-custom-event-modal"
+            onClick={onOpenCustomEvent}
+            aria-label="Plan a custom event"
+            className="utsav-btn utsav-btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 font-semibold text-amber-800 bg-amber-50 border-amber-200 hover:bg-amber-100 cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />
+            <span>{t.planCustomEvent}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onResetPreset}
+            aria-label="Reset preset to default baseline"
+            className="utsav-btn utsav-btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 font-medium cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
+            <span>{t.resetPreset}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onExportIcs}
+            aria-label="Export RFC 5545 iCalendar File"
+            className="utsav-btn utsav-btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 font-semibold text-slate-800 border-slate-300 cursor-pointer"
+          >
+            <Calendar className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
+            <span>{t.exportCalendar}</span>
+          </button>
+        </div>
       </div>
 
-      <div className="flex items-center gap-2.5 flex-wrap">
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />
-          <span>Deterministic Engine Active</span>
+      {/* Layman-friendly Scenario Explainer Banner */}
+      <div className="w-full bg-blue-50 border border-blue-200 text-blue-900 rounded-lg px-3 py-2 text-xs flex items-center gap-2 shadow-xs">
+        <Info className="w-4 h-4 text-blue-600 shrink-0" aria-hidden="true" />
+        <span className="leading-snug">
+          {t.templateExplainer}
         </span>
-
-        <button
-          type="button"
-          id="open-custom-event-modal"
-          onClick={onOpenCustomEvent}
-          aria-label="Plan a custom event"
-          className="utsav-btn utsav-btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 font-semibold text-amber-800 bg-amber-50 border-amber-200 hover:bg-amber-100"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />
-          <span>+ Plan Custom Event</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={onResetPreset}
-          aria-label="Reset preset to default baseline"
-          className="utsav-btn utsav-btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 font-medium"
-        >
-          <RotateCcw className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
-          <span>↻ Reset Preset</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={onExportIcs}
-          aria-label="Export RFC 5545 iCalendar File"
-          className="utsav-btn utsav-btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 font-semibold text-slate-800 border-slate-300"
-        >
-          <Calendar className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
-          <span>📅 Export .ics Calendar</span>
-        </button>
       </div>
     </section>
   );

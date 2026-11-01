@@ -347,7 +347,7 @@ export const GuidedWalkthroughBar: React.FC<GuidedWalkthroughBarProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-200 rounded-lg p-3">
                 <div>
                   <span className="text-slate-800 font-bold block mb-0.5">
-                    Kahn&apos;s DAG Topological Staging Active
+                    Topological Milestone Schedule Active
                   </span>
                   <p className="text-[11px] text-slate-600">
                     {bottleneckCount > 0

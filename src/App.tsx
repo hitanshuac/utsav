@@ -5,7 +5,6 @@ import { AlertBanner } from "./components/AlertBanner";
 import { PageHeader } from "./components/PageHeader";
 import { MainPanel } from "./components/MainPanel";
 import { SidebarStack } from "./components/SidebarStack";
-import { GuidedWalkthroughBar } from "./components/GuidedWalkthroughBar";
 import { ActionDiffModal, ActionDiffData, ActionDiffRow } from "./components/ActionDiffModal";
 import { ActivityHistoryPanel } from "./components/ActivityHistoryPanel";
 const CustomEventModal = lazy(() => import("./components/CustomEventModal"));
@@ -23,22 +22,23 @@ import {
   PlannerEvaluationResult
 } from "./types/planner";
 import { logActivityEvent } from "./lib/services/event-logger";
+import { SupportedLanguage } from "./lib/i18n";
 
 export default function App() {
-  // Preset & Configuration State
-  const [activePreset, setActivePreset] = useState<JudgePreset>(JUDGE_PRESETS.presetA);
-  const [persona, setPersona] = useState<PersonaLens>(JUDGE_PRESETS.presetA.persona);
-  const [eventTitle, setEventTitle] = useState<string>(JUDGE_PRESETS.presetA.title);
-  const [eventDate, setEventDate] = useState<string>(JUDGE_PRESETS.presetA.eventDate);
-  const [budgetCap, setBudgetCap] = useState<number>(JUDGE_PRESETS.presetA.budgetCap);
-  const [guestCount, setGuestCount] = useState<number>(JUDGE_PRESETS.presetA.guestCount);
-  const [baseGuestCount, setBaseGuestCount] = useState<number>(JUDGE_PRESETS.presetA.guestCount);
-  const [daysRemaining, setDaysRemaining] = useState<number>(JUDGE_PRESETS.presetA.daysRemaining);
-  const [budgetItems, setBudgetItems] = useState<BudgetItem[]>(JUDGE_PRESETS.presetA.budget);
-  const [milestones, setMilestones] = useState<MilestoneTask[]>(JUDGE_PRESETS.presetA.milestones);
-  const [vendorPhone, setVendorPhone] = useState<string>(JUDGE_PRESETS.presetA.vendorPhone);
+  // Preset & Configuration State - Initialized on Preset C (Neighborhood Cultural Utsav — Tier 1 Critical Overrun)
+  const [activePreset, setActivePreset] = useState<JudgePreset>(JUDGE_PRESETS.presetC);
+  const [persona, setPersona] = useState<PersonaLens>(JUDGE_PRESETS.presetC.persona);
+  const [eventTitle, setEventTitle] = useState<string>(JUDGE_PRESETS.presetC.title);
+  const [eventDate, setEventDate] = useState<string>(JUDGE_PRESETS.presetC.eventDate);
+  const [budgetCap, setBudgetCap] = useState<number>(JUDGE_PRESETS.presetC.budgetCap);
+  const [guestCount, setGuestCount] = useState<number>(JUDGE_PRESETS.presetC.guestCount);
+  const [baseGuestCount, setBaseGuestCount] = useState<number>(JUDGE_PRESETS.presetC.guestCount);
+  const [daysRemaining, setDaysRemaining] = useState<number>(JUDGE_PRESETS.presetC.daysRemaining);
+  const [budgetItems, setBudgetItems] = useState<BudgetItem[]>(JUDGE_PRESETS.presetC.budget);
+  const [milestones, setMilestones] = useState<MilestoneTask[]>(JUDGE_PRESETS.presetC.milestones);
+  const [vendorPhone, setVendorPhone] = useState<string>(JUDGE_PRESETS.presetC.vendorPhone);
   const [sampleVendorNote, setSampleVendorNote] = useState<string>(
-    JUDGE_PRESETS.presetA.sampleVendorNote
+    JUDGE_PRESETS.presetC.sampleVendorNote
   );
 
   // Guided Walkthrough & Multi-Generational State
@@ -53,6 +53,7 @@ export default function App() {
   const [isActivityLogOpen, setIsActivityLogOpen] = useState<boolean>(false);
   const [isDiffModalOpen, setIsDiffModalOpen] = useState<boolean>(false);
   const [actionDiffData, setActionDiffData] = useState<ActionDiffData | null>(null);
+  const [language, setLanguage] = useState<SupportedLanguage>("en");
 
   // Deterministic Evaluation — Single Source of Truth
   const evaluation = useMemo(() => {
@@ -117,6 +118,44 @@ export default function App() {
     setIsDiffModalOpen(true);
   };
 
+  // 1-Click Role Lens Switcher (Recalibrates priorities per ADR-1 Role-Impact Matrix)
+  const handleSelectPersona = (nextPersona: PersonaLens) => {
+    const prevPersona = persona;
+    setPersona(nextPersona);
+
+    const personaDescriptions: Record<PersonaLens, { name: string; focus: string; audit: string }> = {
+      family_host: {
+        name: "Family Host",
+        focus: "Hospitality & Per-Plate Feast Focus",
+        audit: "Food Quality & Guest Comfort Protection"
+      },
+      wedding_coordinator: {
+        name: "Wedding Coordinator",
+        focus: "DAG Critical Path & Vendor SLAs",
+        audit: "Strict 18% GST Inclusions & Milestone Bottlenecks"
+      },
+      community_organizer: {
+        name: "Community Organizer",
+        focus: "Civic Ground NOCs & Mass Volunteer Rosters",
+        audit: "Municipal Safety, Fire Permits & Headcount Logistics"
+      }
+    };
+
+    const prevInfo = personaDescriptions[prevPersona];
+    const nextInfo = personaDescriptions[nextPersona];
+
+    logActivityEvent({
+      taskId: `lens-${nextPersona}`,
+      taskTitle: `Switched Lens: ${nextInfo.name}`,
+      category: "logistics",
+      channel: "system",
+      vendorName: "Deterministic Engine",
+      recipient: "Coordinator Ops",
+      summary: `Active persona lens switched to ${nextInfo.name}. Dashboard priority recalibrated: ${nextInfo.focus}.`,
+      loopStatus: "closed"
+    });
+  };
+
   // 1-Click Load Scenario Preset
   const handleSelectPreset = (preset: JudgePreset) => {
     const beforeEval = evaluation;
@@ -153,53 +192,6 @@ export default function App() {
       recipient: "Coordinator Team",
       summary: `Loaded ${preset.name}: ₹${(preset.budgetCap / 100000).toFixed(1)}L Cap, ${preset.guestCount} Pax, ${preset.daysRemaining}d Out. Triage Tier: ${nextEval.triageTier}.`,
       loopStatus: "closed"
-    });
-
-    triggerActionDiff({
-      actionName: `Preset Shift: ${preset.name}`,
-      title: `Loaded ${preset.name} Scenario Preset`,
-      explanation: `Loaded official Hack2Skill Challenge 5 scenario preset with ${preset.guestCount} guests, ₹${(preset.budgetCap / 100000).toFixed(1)}L budget cap, and Kahn's DAG milestones.`,
-      recommendedNextStep:
-        nextEval.triageTier === "CRITICAL_OVERRUN"
-          ? "Step 2: Inspect flashing red overrun category and click '⚡ Apply Strategy'."
-          : nextEval.triageTier === "TIMELINE_BOTTLENECK"
-          ? "Step 3: Check Flowchart for blocked critical-path milestone prerequisites."
-          : "Step 4: Audit vendor plain-text quotation and verify contract terms.",
-      deltas: [
-        {
-          label: "Scenario Preset",
-          before: activePreset.name,
-          after: preset.name,
-          diff: "Preset Shift"
-        },
-        {
-          label: "Budget Cap",
-          before: `₹${budgetCap.toLocaleString("en-IN")}`,
-          after: `₹${preset.budgetCap.toLocaleString("en-IN")}`,
-          diff: `₹${(preset.budgetCap / 100000).toFixed(1)}L`
-        },
-        {
-          label: "Guest Count",
-          before: `${guestCount} Pax`,
-          after: `${preset.guestCount} Pax`,
-          diff: `${preset.guestCount} Pax`
-        },
-        {
-          label: "Days to Event",
-          before: `${daysRemaining} Days`,
-          after: `${preset.daysRemaining} Days`,
-          diff: `${preset.daysRemaining}d`
-        },
-        {
-          label: "Triage Health",
-          before: `${beforeEval.triageTier} (${beforeEval.urgencyScore}/100)`,
-          after: `${nextEval.triageTier} (${nextEval.urgencyScore}/100)`,
-          diff: `${nextEval.triageTier.replace("_", " ")}`,
-          isImprovement: nextEval.urgencyScore <= beforeEval.urgencyScore
-        }
-      ],
-      beforeEvaluation: beforeEval,
-      afterEvaluation: nextEval
     });
   };
 
@@ -244,7 +236,7 @@ export default function App() {
       channel: "system",
       vendorName: "Deterministic Engine",
       recipient: "Coordinator Team",
-      summary: `Dynamic 6-category plan & 6-step Kahn's DAG generated in <5ms for ${result.guestCount} pax, ₹${result.budgetCap.toLocaleString("en-IN")}.`,
+      summary: `Dynamic 6-category plan & 6-step milestone schedule generated in <5ms for ${result.guestCount} pax, ₹${result.budgetCap.toLocaleString("en-IN")}.`,
       loopStatus: "closed"
     });
 
@@ -278,9 +270,8 @@ export default function App() {
     });
   };
 
-  // Toggle Verified Quote vs Estimated Assumption
+  // Toggle Verified Quote vs Estimated Assumption (Seamless)
   const handleToggleVerified = (itemId: string) => {
-    const beforeEval = evaluation;
     const updatedItems = budgetItems.map((item) =>
       item.id === itemId ? { ...item, isEstimate: !item.isEstimate } : item
     );
@@ -288,17 +279,6 @@ export default function App() {
     const willBeEstimate = targetItem ? !targetItem.isEstimate : false;
 
     setBudgetItems(updatedItems);
-
-    const nextEval = evaluateEventPlan({
-      eventTitle,
-      personaLens: persona,
-      guestCount,
-      baseGuestCount,
-      totalBudgetCap: budgetCap,
-      daysRemaining,
-      budgetItems: updatedItems,
-      milestones
-    });
 
     logActivityEvent({
       taskId: itemId,
@@ -310,27 +290,66 @@ export default function App() {
       summary: `Transitioned ${targetItem?.label} to ${willBeEstimate ? "Estimated Assumption" : "Verified Quote"}.`,
       loopStatus: "closed"
     });
+  };
 
-    triggerActionDiff({
-      actionName: `Quote Status: ${targetItem?.label}`,
-      title: `Toggled ${targetItem?.label} Status`,
-      explanation: willBeEstimate
-        ? `Marked item as estimated assumption. The engine flags unconfirmed estimates during Tier 1 Overrun.`
-        : `Locked item with a verified vendor contract quote, removing estimate uncertainty risk.`,
-      recommendedNextStep: willBeEstimate
-        ? "Obtain written quotation from vendor to lock contract rate."
-        : "Check downstream milestone dependencies in Step 3.",
-      deltas: [
-        {
-          label: targetItem?.label || "Item",
-          before: targetItem?.isEstimate ? "Estimated Assumption" : "Verified Quote",
-          after: willBeEstimate ? "Estimated Assumption" : "Verified Quote",
-          diff: willBeEstimate ? "Unconfirmed Risk" : "Locked Quote",
-          isImprovement: !willBeEstimate
-        }
-      ],
-      beforeEvaluation: beforeEval,
-      afterEvaluation: nextEval
+  // Manual Budget Item Amount Edit (Inline Number Revision)
+  const handleUpdateBudgetItemAmount = (itemId: string, newAmount: number) => {
+    const targetItem = budgetItems.find((i) => i.id === itemId);
+    if (!targetItem || isNaN(newAmount) || newAmount < 0) return;
+    const oldAmount = targetItem.allocatedAmount;
+
+    const updatedItems = budgetItems.map((item) =>
+      item.id === itemId ? { ...item, allocatedAmount: newAmount, isEstimate: false } : item
+    );
+
+    setBudgetItems(updatedItems);
+
+    logActivityEvent({
+      taskId: itemId,
+      taskTitle: `Manual Revision: ${targetItem.label}`,
+      category: targetItem.category,
+      channel: "system",
+      vendorName: "Coordinator Input",
+      recipient: "Operations",
+      summary: `Manually updated ${targetItem.label} allocation from ₹${oldAmount.toLocaleString("en-IN")} to ₹${newAmount.toLocaleString("en-IN")} (Variance impact: ${newAmount < oldAmount ? `saved ₹${(oldAmount - newAmount).toLocaleString("en-IN")}` : `increased ₹${(newAmount - oldAmount).toLocaleString("en-IN")}`}).`,
+      loopStatus: "closed"
+    });
+  };
+
+  // 1-Click Budget Cap Top-Up (Directly fund deficit)
+  const handleTopUpBudget = (additionalAmount?: number) => {
+    const deficit = Math.abs(evaluation.variance);
+    const topUp = additionalAmount || (deficit > 0 ? deficit : 100000);
+    const oldCap = budgetCap;
+    const newCap = oldCap + topUp;
+
+    setBudgetCap(newCap);
+
+    logActivityEvent({
+      taskId: "budget-topup",
+      taskTitle: `Budget Cap Top-Up (+₹${topUp.toLocaleString("en-IN")})`,
+      category: "venue",
+      channel: "system",
+      vendorName: "Host / Family Infusion",
+      recipient: "Finance Ops",
+      summary: `Allocated additional ₹${topUp.toLocaleString("en-IN")} to authorized budget ceiling (New Cap: ₹${newCap.toLocaleString("en-IN")}). Deficit resolved.`,
+      loopStatus: "closed"
+    });
+  };
+
+  // Real-Time Event & Disruption Tracker (Closes operations loop)
+  const handleLogRealTimeEvent = (eventDescription: string, category: string = "logistics") => {
+    if (!eventDescription.trim()) return;
+
+    logActivityEvent({
+      taskId: `live-${Date.now()}`,
+      taskTitle: `Real-Time Event: ${eventDescription.slice(0, 40)}`,
+      category: category as any,
+      channel: "system",
+      vendorName: "Live Floor Ops",
+      recipient: "Coordinator Team",
+      summary: `[Real-Time Event Tracker]: ${eventDescription}`,
+      loopStatus: "closed"
     });
   };
 
@@ -390,7 +409,7 @@ export default function App() {
       title: `Updated Milestone ${target.id.toUpperCase()}`,
       explanation:
         status === "completed"
-          ? `Milestone marked completed. Prerequisite locks on dependent downstream tasks in Kahn's DAG have cleared.`
+          ? `Milestone marked completed. Prerequisite locks on dependent downstream tasks have cleared.`
           : `Milestone status set to ${status}. Upstream prerequisite checks are enforced.`,
       recommendedNextStep:
         status === "completed"
@@ -588,26 +607,29 @@ export default function App() {
       {/* REGION 1: STICKY TOP APP BAR WITH ACTIVITY LOG COUNTER */}
       <AppBar
         currentPersona={persona}
-        onSelectPersona={setPersona}
+        onSelectPersona={handleSelectPersona}
         activePresetId={activePreset.id}
         onSelectPreset={handleSelectPreset}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onOpenActivityHistory={() => setIsActivityLogOpen(true)}
+        language={language}
+        onLanguageChange={setLanguage}
       />
 
-      {/* REGION 2: TOPIC NAVIGATION TAB BAR */}
+      {/* REGION 2: UNIFIED 4-STEP GUIDED STEP-TAB BAR */}
       <TopicTabs
         activeTab={activeTab}
         onTabChange={(tab) => {
           setActiveTab(tab);
-          if (tab === "overview") setWalkthroughStep(1);
+          if (tab === "overview" || tab === "dag") setWalkthroughStep(1);
           else if (tab === "budget") setWalkthroughStep(2);
-          else if (tab === "dag") setWalkthroughStep(3);
-          else if (tab === "vendor") setWalkthroughStep(4);
+          else if (tab === "vendor") setWalkthroughStep(3);
+          else if (tab === "activity") setWalkthroughStep(4);
         }}
         overrunCount={evaluation.overrunAmount > 0 ? 1 : 0}
         bottleneckCount={evaluation.criticalPathBottlenecks.length}
+        language={language}
       />
 
       {/* DYNAMIC ALERT BANNER (CRITICAL FLASHING HIGHLIGHTS) */}
@@ -617,34 +639,6 @@ export default function App() {
         deficitAmount={evaluation.overrunAmount}
         bottleneckCount={evaluation.criticalPathBottlenecks.length}
         onResolveTradeoffs={handleResolveTradeoffsClick}
-      />
-
-      {/* RESTORATION 1: 4-STEP GUIDED WALKTHROUGH STRIP & INLINE WIZARD */}
-      <GuidedWalkthroughBar
-        currentStep={walkthroughStep}
-        onStepChange={setWalkthroughStep}
-        eventTitle={eventTitle}
-        onEventTitleChange={setEventTitle}
-        budgetCap={budgetCap}
-        onBudgetCapChange={setBudgetCap}
-        guestCount={guestCount}
-        onGuestCountChange={setGuestCount}
-        daysRemaining={daysRemaining}
-        onDaysRemainingChange={setDaysRemaining}
-        dietaryProfile={dietaryProfile}
-        onDietaryProfileChange={setDietaryProfile}
-        guestAccessibility={guestAccessibility}
-        onGuestAccessibilityChange={setGuestAccessibility}
-        overrunAmount={evaluation.overrunAmount}
-        variance={evaluation.variance}
-        bottleneckCount={evaluation.criticalPathBottlenecks.length}
-        tradeoffsCount={tradeoffs.length}
-        onApplyFirstTradeoff={
-          tradeoffs.length > 0 ? () => handleApplyTradeoff(tradeoffs[0]) : undefined
-        }
-        onOpenCustomEvent={() => setIsCustomEventOpen(true)}
-        onOpenActivityHistory={() => setIsActivityLogOpen(true)}
-        onSwitchTab={setActiveTab}
       />
 
       {/* REGION 3: PAGE HEADER */}
@@ -658,6 +652,7 @@ export default function App() {
         onResetPreset={handleResetPreset}
         onExportIcs={handleExportIcs}
         onOpenCustomEvent={() => setIsCustomEventOpen(true)}
+        language={language}
       />
 
       {/* REGION 4: 12-COLUMN EXECUTION GRID (8 MAIN / 4 SIDEBAR) */}
@@ -681,11 +676,18 @@ export default function App() {
           onToggleVerified={handleToggleVerified}
           onCycleTaskStatus={handleCycleTaskStatus}
           onUpdateTaskStatus={handleUpdateTaskStatus}
+          onUpdateBudgetItem={handleUpdateBudgetItemAmount}
+          onTopUpBudget={handleTopUpBudget}
+          onLogRealTimeEvent={handleLogRealTimeEvent}
           vendorPhone={vendorPhone}
           sampleVendorNote={sampleVendorNote}
           filterQuery={searchQuery}
+          onClearFilter={() => setSearchQuery("")}
           daysRemaining={daysRemaining}
           eventTitle={eventTitle}
+          persona={persona}
+          language={language}
+          onTabChange={setActiveTab}
           onActionTriggered={(name, explanation, deltas) => {
             triggerActionDiff({
               actionName: name,
