@@ -24,26 +24,26 @@ export const TopicTabs: React.FC<TopicTabsProps> = ({
   const tabs: { id: TopicTabId; label: string; icon: React.ReactNode; badge?: string; badgeColor?: string }[] = [
     {
       id: "overview",
-      label: language === "hi" ? "चरण 1: फ्लोचार्ट" : language === "hinglish" ? "Step 1: Flowchart" : "Step 1: Visual Flowchart",
+      label: "Step 1: Visual Flowchart",
       icon: <GitBranch className="w-4 h-4 shrink-0" aria-hidden="true" />,
       badge: bottleneckCount > 0 ? `${bottleneckCount} Blocked` : undefined,
       badgeColor: "bg-amber-100 text-amber-800 border-amber-200"
     },
     {
       id: "budget",
-      label: language === "hi" ? "चरण 2: बजट & ट्रेड-ऑफ़" : language === "hinglish" ? "Step 2: Budget & Kharcha" : "Step 2: Budget & Trade-Offs",
+      label: "Step 2: Budget & Trade-Offs",
       icon: <WalletCards className="w-4 h-4 shrink-0" aria-hidden="true" />,
       badge: overrunCount > 0 ? "Deficit" : undefined,
       badgeColor: "bg-rose-100 text-rose-700 border-rose-200"
     },
     {
       id: "vendor",
-      label: language === "hi" ? "चरण 3: वेंडर कोटेशन" : language === "hinglish" ? "Step 3: Vendor Quotes" : "Step 3: Vendor Quotes",
+      label: "Step 3: Vendor Quotes",
       icon: <FileSearch className="w-4 h-4 shrink-0" aria-hidden="true" />
     },
     {
       id: "activity",
-      label: language === "hi" ? "चरण 4: गतिविधि लॉग" : language === "hinglish" ? "Step 4: Activity Log" : "Step 4: Activity Log",
+      label: "Step 4: Activity Log",
       icon: <Clock className="w-4 h-4 shrink-0" aria-hidden="true" />
     }
   ];

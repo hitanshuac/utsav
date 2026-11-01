@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ChevronDown, Search, ShieldCheck, Check, Clock, Globe } from "lucide-react";
+import { ChevronDown, Search, ShieldCheck, Check, Clock } from "lucide-react";
 import { PersonaLens } from "../types/planner";
 import { JUDGE_PRESETS, JudgePreset } from "../lib/presets";
 import { getActivityEvents, subscribeToEventLogger } from "../lib/services/event-logger";
@@ -31,7 +31,6 @@ export const AppBar: React.FC<AppBarProps> = ({
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
-  const [langMenuOpen, setLangMenuOpen] = useState(false);
   const [activityCount, setActivityCount] = useState<number>(0);
 
   useEffect(() => {
@@ -48,14 +47,6 @@ export const AppBar: React.FC<AppBarProps> = ({
   ];
 
   const currentRoleLabel = personas.find((p) => p.id === currentPersona)?.label || t.personaFamilyHost;
-
-  const languages: { id: SupportedLanguage; label: string }[] = [
-    { id: "en", label: "English" },
-    { id: "hi", label: "हिंदी (Hindi)" },
-    { id: "hinglish", label: "Hinglish" }
-  ];
-
-  const currentLangLabel = languages.find((l) => l.id === language)?.label || "English";
 
   return (
     <header className="utsav-r1-appbar" aria-label="Top Application Bar">
@@ -111,57 +102,8 @@ export const AppBar: React.FC<AppBarProps> = ({
         </div>
       </div>
 
-      {/* Right Controls: Language Selector + Role Lens Dropdown + Presets + Activity Log */}
+      {/* Right Controls: Role Lens Dropdown + Presets + Activity Log */}
       <div className="flex items-center gap-2">
-        {/* Language Selector Dropdown */}
-        {onLanguageChange && (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setLangMenuOpen((prev) => !prev);
-                setRoleMenuOpen(false);
-                setPresetMenuOpen(false);
-              }}
-              aria-haspopup="menu"
-              aria-expanded={langMenuOpen}
-              aria-label={`Select Language: currently ${currentLangLabel}`}
-              className="utsav-btn utsav-btn-secondary text-xs px-2.5 py-1.5 font-medium flex items-center gap-1.5"
-            >
-              <Globe className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
-              <span className="hidden sm:inline font-semibold text-slate-800">{currentLangLabel}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
-            </button>
-
-            {langMenuOpen && (
-              <div
-                role="menu"
-                aria-label="Select Language Menu"
-                className="absolute right-0 mt-1.5 w-44 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50 flex flex-col"
-              >
-                {languages.map((l) => (
-                  <button
-                    key={l.id}
-                    role="menuitem"
-                    onClick={() => {
-                      onLanguageChange(l.id);
-                      setLangMenuOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors hover:bg-slate-50 ${
-                      language === l.id ? "bg-amber-50 font-semibold text-slate-900" : "text-slate-700"
-                    }`}
-                  >
-                    <span>{l.label}</span>
-                    {language === l.id && (
-                      <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" aria-hidden="true" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Role Lens Dropdown with role="menu" */}
         <div className="relative">
           <button
@@ -169,7 +111,6 @@ export const AppBar: React.FC<AppBarProps> = ({
             onClick={() => {
               setRoleMenuOpen((prev) => !prev);
               setPresetMenuOpen(false);
-              setLangMenuOpen(false);
             }}
             aria-haspopup="menu"
             aria-expanded={roleMenuOpen}
@@ -219,7 +160,6 @@ export const AppBar: React.FC<AppBarProps> = ({
             onClick={() => {
               setPresetMenuOpen((prev) => !prev);
               setRoleMenuOpen(false);
-              setLangMenuOpen(false);
             }}
             aria-haspopup="menu"
             aria-expanded={presetMenuOpen}

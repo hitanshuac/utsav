@@ -757,7 +757,6 @@ export default function App() {
         onSearchChange={setSearchQuery}
         onOpenActivityHistory={() => setIsActivityLogOpen(true)}
         language={language}
-        onLanguageChange={setLanguage}
       />
 
       {/* REGION 2: UNIFIED 4-STEP GUIDED STEP-TAB BAR */}
