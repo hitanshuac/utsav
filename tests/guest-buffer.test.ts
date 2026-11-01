@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { calculateGuestBuffer } from "../lib/engine/guest-buffer";
-import { FloatingGuestConfig } from "../lib/types";
+import { calculateGuestBuffer } from "../src/lib/engine/guest-buffer";
+import { FloatingGuestConfig } from "../src/types/schemas";
 
 describe("Floating Guest & Catering Buffer Math", () => {
   const config: FloatingGuestConfig = {

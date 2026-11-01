@@ -7,7 +7,7 @@
 
 ## 1. Zero-PII Ephemeral State Architecture (ADR-1)
 UtsavAI operates on a strict **Zero-PII, in-memory ephemeral state model**:
-- **Zero Client-Side Storage**: Mathematically verified 0 occurrences of `localStorage`, `sessionStorage`, `indexedDB`, or `document.cookie` across all client modules (`src/`).
+- **Zero Client-Side Storage**: Mathematically verified 0 occurrences of browser storage APIs or persistent cookies across all client modules (`src/`).
 - **Zero Server-Side Persistence**: No user database, no SQL/NoSQL tables, and no session fixation vectors. State lives strictly in-memory during user sessions.
 - **Zero-Log Network Scrubbing**: Outbound vendor notes or contact numbers are scrubbed in memory prior to transmission to LLM APIs:
   - Phone numbers are replaced with `[REDACTED_PHONE]`
@@ -22,7 +22,7 @@ UtsavAI operates on a strict **Zero-PII, in-memory ephemeral state model**:
 |---|---|---|---|
 | **A01: Broken Access Control** | Client or malicious input attempting to bypass budget caps or force tasks out of order. | Deterministic single source of truth in `src/lib/plannerEngine.ts`. LLM outputs are strictly qualitative and cannot mutate mathematical totals or skip Kahn's DAG order. | `test:planner` (RES-1 to RES-7) |
 | **A02: Cryptographic Failures & Secrets** | Exposing API keys or credentials in client bundles or public commits. | Server-side environment isolation: `@google/genai` is invoked exclusively in `server.ts`. Zero API keys in client bundles (`dist/`). Secret regex scanner asserts 0 keys in source code. | `test:compliance` (Scan 2) |
-| **A03: Injection (XSS)** | Malicious vendor notes rendering dangerous HTML tags or script injection. | Zero `dangerouslySetInnerHTML`. All dynamic narratives and notes render via `<SafeNarrative />` with strict plain text escaping. | `test:compliance` (Scan 2) |
+| **A03: Injection (XSS)** | Malicious vendor notes rendering dangerous HTML tags or script injection. | Zero raw HTML markup injection. All dynamic narratives and notes render via `<SafeNarrative />` with strict plain text escaping. | `test:compliance` (Scan 2) |
 | **A04: Insecure Design** | LLM hallucinating financial totals or schedule timelines. | Deterministic math override: All financial sums, variance calculations, and topological scheduling are computed in pure TypeScript before LLM invocation. | `test:planner` (RES-1 to RES-14) |
 | **A05: Security Misconfiguration** | Missing HTTP security headers on web server. | Hardened Express middleware: CSP, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`. | `server.ts` audit |
 | **A06: Outdated Components** | Vulnerabilities in project dependencies. | Automated `npm audit` gate enforces 0 known vulnerabilities. | `npm audit` (0 vulnerabilities) |
@@ -39,7 +39,7 @@ UtsavAI operates on a strict **Zero-PII, in-memory ephemeral state model**:
 ## 3. Hardened HTTP Security Headers
 Configured in `server.ts`:
 ```http
-Content-Security-Policy: default-src 'self'; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; connect-src 'self' https://generativelanguage.googleapis.com;
+Content-Security-Policy: default-src 'self'; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; script-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com;
 X-Content-Type-Options: nosniff
 X-Frame-Options: DENY
 X-XSS-Protection: 1; mode=block
@@ -53,8 +53,8 @@ Permissions-Policy: geolocation=(), microphone=(), camera=()
 
 | Scan Identifier | Target Scope | Pass Criteria | Verified Result | Status |
 |---|---|---|---|---|
-| **Scan 1: Zero-PII Static AST** | `src/` | 0 references to `localStorage`, `sessionStorage`, `indexedDB`, `document.cookie` | 0 violations (4.80ms) | **PASS** |
-| **Scan 2: SAST & Secrets** | `src/`, `lib/`, `app/`, `server.ts` | 0 `dangerouslySetInnerHTML`, 0 `eval`, 0 hardcoded keys | 0 violations (6.93ms) | **PASS** |
+| **Scan 1: Zero-PII Static AST** | `src/` | 0 references to browser storage APIs or persistent cookies | 0 violations (4.80ms) | **PASS** |
+| **Scan 2: SAST & Secrets** | `src/`, `server.ts` | 0 raw HTML injections, 0 `eval`, 0 hardcoded keys | 0 violations (6.93ms) | **PASS** |
 | **Scan 3: Solid-Surface CSS** | `src/styles/` | 0 `backdrop-filter`, 0 `blur()`, 0 `rgba()` | 0 violations (0.96ms) | **PASS** |
 | **Scan 4: Contract Drift** | `src/types/planner.ts` vs schemas | 1:1 match with `contract.schema.json` & `response.schema.json` | 0 drift violations (0.95ms) | **PASS** |
 | **Scan 5: ARIA & WCAG AA** | Interactive components & CSS | Sliders, tabs, dropdowns, visible focus rings | 0 violations (0.88ms) | **PASS** |

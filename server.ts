@@ -1,10 +1,11 @@
 import "dotenv/config";
 import express, { Request, Response, NextFunction } from "express";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
-import { handlePlannerRequest } from "./app/api/planner/route";
-import { SecureLLMClient } from "./lib/security/secure-llm-client";
+import { handlePlannerRequest } from "./src/lib/services/planner-route";
+import { SecureLLMClient } from "./src/lib/services/secure-llm-client";
 import {
   evaluateEventPlan,
   generateDeterministicTradeoffs,
@@ -60,24 +61,77 @@ function getRoleTailoredNarrative(persona: string, deficit: number): string {
 }
 
 
+// Recursive Prototype Pollution Sanitizer (OWASP Top 10)
+export function sanitizeObjectKeys<T>(obj: T): T {
+  if (obj === null || typeof obj !== "object") {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(sanitizeObjectKeys) as unknown as T;
+  }
+  const clean: Record<string, any> = {};
+  for (const key of Object.keys(obj)) {
+    if (key === "__proto__" || key === "constructor" || key === "prototype") {
+      continue;
+    }
+    clean[key] = sanitizeObjectKeys((obj as any)[key]);
+  }
+  for (const key of Object.getOwnPropertyNames(obj)) {
+    if (key === "__proto__" || key === "constructor" || key === "prototype") {
+      delete (clean as any)[key];
+    }
+  }
+  return clean as T;
+}
+
 export function createApp(): express.Express {
   const app = express();
   const PORT = Number(process.env.APP_PORT || process.env.PORT) || 3000;
 
-  // Strict Request Body Limit
-  app.use(express.json({ limit: "64kb" }));
+  // Strict Request Body Limit (OWASP ASVS)
+  app.use(express.json({ limit: "16kb" }));
 
-  // Hardened HTTP Security Headers (OWASP Top 10 / A05)
-  app.use((_req: Request, res: Response, next: NextFunction) => {
-    res.setHeader(
-      "Content-Security-Policy",
-      "default-src 'self'; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https://generativelanguage.googleapis.com;"
-    );
+  // Recursive Prototype Pollution Sanitizer
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    if (req.body && typeof req.body === "object") {
+      req.body = sanitizeObjectKeys(req.body);
+    }
+    next();
+  });
+
+  // Hardened HTTP Security Headers (OWASP Top 10 / ASVS v4.0)
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const isDev = process.env.NODE_ENV !== "production";
+    const csp = isDev
+      ? "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; font-src 'self' https://fonts.gstatic.com data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https://generativelanguage.googleapis.com ws: wss: http: https:;"
+      : "default-src 'self'; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; script-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com;";
+    res.setHeader("Content-Security-Policy", csp);
+    res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+    res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+    res.setHeader("X-Permitted-Cross-Domain-Policies", "none");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("X-XSS-Protection", "1; mode=block");
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
     res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+    if (req.path.startsWith("/assets/")) {
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    }
+    next();
+  });
+
+  // 415 Unsupported Media Type validation on POST /api/*
+  app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+    if (req.method === "POST") {
+      if (!req.is("application/json")) {
+        res.status(415).json({
+          error: "UnsupportedMediaType",
+          message: "Expected application/json payload"
+        });
+        return;
+      }
+    }
     next();
   });
 
@@ -336,9 +390,15 @@ Return strictly valid JSON:
   return app;
 }
 
+const app = createApp();
+const PORT = Number(process.env.APP_PORT || process.env.PORT) || 3000;
+
 export async function startServer() {
-  const app = createApp();
-  const PORT = Number(process.env.APP_PORT || process.env.PORT) || 3000;
+  const distPath = path.join(__dirname, "dist");
+  const distAssetsPath = path.join(distPath, "assets");
+  if (fs.existsSync(distAssetsPath)) {
+    app.use("/assets", express.static(distAssetsPath, { maxAge: "1d" }));
+  }
 
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -346,13 +406,32 @@ export async function startServer() {
       appType: "spa"
     });
     app.use(vite.middlewares);
+    app.use("*", async (req, res, next) => {
+      const url = req.originalUrl;
+      try {
+        let template = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf-8");
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ "Content-Type": "text/html" }).end(template);
+      } catch (e) {
+        if (e && typeof (e as any).stack === "string") {
+          vite.ssrFixStacktrace(e as Error);
+        }
+        next(e);
+      }
+    });
   } else {
-    const distPath = path.join(__dirname, "dist");
     app.use(express.static(distPath));
     app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
+
+  process.on("uncaughtException", (err) => {
+    console.error("[Server Process Guard] Caught uncaughtException:", err.message);
+  });
+  process.on("unhandledRejection", (reason) => {
+    console.error("[Server Process Guard] Caught unhandledRejection:", reason);
+  });
 
   return app.listen(PORT, "0.0.0.0", () => {
     const status = SecureLLMClient.getInstance().getStatus();
@@ -372,6 +451,9 @@ const isDirectRun = Boolean(
    process.argv[1].endsWith("server.ts"))
 );
 
-if (isDirectRun) {
+if (process.env.VERCEL !== "1" && process.env.NODE_ENV !== "test" && isDirectRun) {
   startServer();
 }
+
+export { app };
+export default app;

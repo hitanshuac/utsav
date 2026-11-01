@@ -28,9 +28,10 @@ export const AlertBanner: React.FC<AlertBannerProps> = ({
     <div
       role="alert"
       aria-live="assertive"
-      className={`utsav-alert-banner ${bannerType} flex items-center justify-between gap-4`}
+      className={`utsav-alert-banner ${bannerType} ${isOverrun ? "critical-flash-card" : ""} flex items-center justify-between gap-4`}
     >
       <div className="flex items-center gap-2.5">
+        {isOverrun && <span className="critical-pulse-dot shrink-0" aria-hidden="true" />}
         {isOverrun ? (
           <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" aria-hidden="true" />
         ) : (

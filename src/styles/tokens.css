@@ -17,6 +17,7 @@
 
   /* Text Colors (High Contrast, WCAG AA compliant >= 4.5:1) */
   --c-text: #0f172a;
+  --c-text-primary: #0f172a;
   --c-text-body: #334155;
   --c-text-muted: #64748b;
   --c-text-subtle: #94a3b8;
@@ -78,6 +79,7 @@
   /* Border Radius */
   --rad-sm: 0.375rem;
   --rad-md: 0.5rem;
+  --radius-md: 0.5rem;
   --rad-lg: 0.75rem;
   --rad-xl: 1rem;
   --rad-full: 9999px;

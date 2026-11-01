@@ -9,6 +9,11 @@ import { MilestoneTask } from "../types/planner";
 /**
  * Generates a downloadable RFC 5545 .ics calendar file containing all DAG milestones
  * with calculated calendar dates relative to the event date.
+ *
+ * @param tasksOrMilestones - List of milestone tasks or task objects with target dates
+ * @param eventDateStr - Target event ISO date string (optional if task objects provided)
+ * @param eventTitle - Event title for the calendar summary
+ * @returns RFC 5545 compliant iCalendar string
  */
 export function generateIcsCalendar(
   milestones: MilestoneTask[],
@@ -77,6 +82,11 @@ export function generateIcsCalendar(
 /**
  * Generates a sanitized https://wa.me/ URL pre-populated with numbered clarification questions
  * or a customized message for the vendor.
+ *
+ * @param phoneNumber - Vendor phone number in international or local format
+ * @param messageOrQuestions - Single message string or array of numbered negotiation questions
+ * @param vendorName - Optional vendor name for contextual greeting
+ * @returns Fully encoded https://wa.me URL string
  */
 export function generateWhatsAppLink(
   phoneNumber: string,
@@ -102,4 +112,22 @@ export function generateWhatsAppLink(
   return cleanPhone
     ? `https://wa.me/${cleanPhone}?text=${encodedText}`
     : `https://wa.me/?text=${encodedText}`;
+}
+
+/**
+ * Generates a pre-formatted WhatsApp clarification link for a specific vendor and questions list.
+ *
+ * @param phone - Raw phone number string
+ * @param vendor - Vendor contact or business name
+ * @param questions - Array of audit clarification questions
+ * @returns Encoded https://wa.me URL link
+ */
+export function createWhatsAppDispatchLink(
+  phone: string,
+  vendor: string,
+  questions: string[]
+): string {
+  const cleanPhone = phone.replace(/[^0-9]/g, "");
+  const text = `Hi ${vendor}, regarding the quotation details:\n${questions.map((q, idx) => `${idx + 1}. ${q}`).join("\n")}\n\nCould you please clarify these points? Thank you!`;
+  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
 }

@@ -1,0 +1,40 @@
+name: UtsavAI CI Verification Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    name: Build & Test Verification Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: TypeScript Lint & Typecheck
+        run: npm run lint
+
+      - name: Deterministic Planner Resilience Harness (14/14 Scenarios)
+        run: npm run test:planner
+
+      - name: Security, Privacy & Contract Compliance Scan (6/6 Scans)
+        run: npm run test:compliance
+
+      - name: Full Vitest Regression Suite
+        run: npm test
+
+      - name: Production Vite Bundle Build
+        run: npm run build

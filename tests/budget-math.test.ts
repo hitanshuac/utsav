@@ -3,8 +3,8 @@ import {
   calculateBudgetSummary,
   applyDynamicDelta,
   applyTradeoffResolution
-} from "../lib/engine/budget-math";
-import { BudgetItem } from "../lib/types";
+} from "../src/lib/engine/budget-math";
+import { BudgetItem } from "../src/types/planner";
 
 describe("Deterministic Budget Calculations", () => {
   const sampleItems: BudgetItem[] = [

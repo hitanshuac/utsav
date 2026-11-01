@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { clearDispatchLog, getDispatchLog } from "../src/lib/services/communication";
-import { TMinusAlertService } from "../lib/services/tminus-alert-service";
-import { MilestoneTask } from "../lib/types";
+import { TMinusAlertService } from "../src/lib/services/tminus-alert-service";
+import { MilestoneTask } from "../src/types/planner";
 
 describe("TMinusAlertService with Communication Integration", () => {
   const service = TMinusAlertService.getInstance();

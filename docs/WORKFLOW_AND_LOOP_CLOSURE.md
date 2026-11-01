@@ -1,12 +1,12 @@
 # Communication, Event Logger & Loop Closure Workflow
 
-## 1. Persistent Activity & Loop Logger (`lib/services/event-logger.ts`)
+## 1. Ephemeral Activity & Loop Logger (`src/lib/services/event-logger.ts`)
 
 Event coordination requires tracking every notification sent and closing the loop (usually via phone call or vendor confirmation).
 
-- **Storage Key**: `utsav_activity_event_log_v1` in `localStorage` (with in-memory fallback for Node/Vitest environments).
+- **Storage**: 100% ephemeral in-memory reactive state (Zero-PII compliance, zero persistent disk/cookies/web storage).
 - **Logged Channels**: `"whatsapp" | "email" | "call" | "system" | "loop_closed"`
-- **Real-Time Cross-Component Sync**: Dispatches `window.dispatchEvent(new CustomEvent("utsav-event-log-updated"))` whenever an event is logged or resolved so all dashboard widgets update immediately.
+- **Real-Time Cross-Component Sync**: Reactive in-memory subscription listener (`subscribeToEventLogger`) dispatches state updates so all dashboard widgets update immediately.
 
 ---
 

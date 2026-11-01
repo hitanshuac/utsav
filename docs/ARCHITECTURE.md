@@ -1,63 +1,70 @@
-# Architecture & Data Flow (`UtsavLedger`)
+# Architecture & Data Flow (`UtsavAI`)
 
 ## 1. High-Level System Design
 
-`UtsavLedger` is a hybrid deterministic + AI-assisted command center designed for high-stakes Indian weddings and community celebrations.
+`UtsavAI` is a hybrid deterministic + AI-assisted celebration and event execution engine designed for high-stakes Indian weddings and community events.
 
 ```text
-[React 19 + Tailwind v4 SPA]
+[React 19 + Tailwind CSS v4 SPA]
        │
-       ├──► Deterministic Engines (Client-Side TypeScript)
-       │      ├── Budget & Per-Guest Scaling (lib/engine/budget-math.ts)
-       │      ├── Kahn's Topological Sort (lib/engine/dependency-graph.ts)
-       │      ├── T-Minus Delay Cascade (lib/engine/delay-cascade.ts)
-       │      └── Persistent Event Logger (lib/services/event-logger.ts -> localStorage)
+       ├──► Deterministic Engine (Client-Side TypeScript: src/lib/plannerEngine.ts)
+       │      ├── Budget Arithmetic & Per-Guest Plate Scaling (evaluateEventPlan)
+       │      ├── Kahn's Topological Sort & Cycle Detection (sortMilestonesTopologically)
+       │      ├── Milestone T-Minus Dependency Cascade & Critical Path Bottlenecks
+       │      ├── Custom Event Guided Intake Generator (generateCustomEventPlan)
+       │      ├── RFC 5545 iCalendar Generator (generateIcsCalendar)
+       │      └── Ephemeral Event Logger (src/lib/services/event-logger.ts -> 100% In-Memory)
        │
-       └──► HTTP POST /api/planner (Express Server on :3000)
+       └──► HTTP POST /api/rebalance, /api/audit-vendor, /api/planner (Express Server on :3000)
               │
-              └──► SecureLLMClient (lib/security/secure-llm-client.ts)
-                     ├── 1. Pre-flight OWASP LLM01 Input Sanitization
-                     ├── 2. @google/genai (gemini-3.8-flash -> fallback gemini-2.5-flash)
-                     ├── 3. Post-flight OWASP LLM06 Credential Leak Inspection
-                     ├── 4. Strict Zod Schema Validation (lib/types.ts)
-                     └── 5. Automatic Deterministic Shield Fallback on timeout/missing key
+              └──► SecureLLMClient (src/lib/services/secure-llm-client.ts)
+                     ├── 1. Pre-flight OWASP LLM01 Input Sanitization (strip HTML, max 800 chars)
+                     ├── 2. Google Gemini (@google/genai: gemini-2.5-flash -> fallback gemini-2.0-flash)
+                     ├── 3. Post-flight OWASP LLM06 Credential Leak Inspection (blocks AIza... / sk-...)
+                     ├── 4. Strict Zod Schema Runtime Validation (src/types/schemas.ts)
+                     └── 5. Automatic Deterministic Shield Fallback on missing key or API failure
 ```
 
 ---
 
-## 2. State Management (`lib/store/usePlannerStore.ts`)
+## 2. State Management & Scenarios
 
-Global application state is managed via **Zustand**:
+Application state is held in ephemeral in-memory React 19 state with zero persistent client storage (zero browser web storage, indexed database, or cookies), upholding a strict Zero-PII security guarantee.
 
-- **Scenario Presets**:
-  - `sharma-wedding`: 350 guests, ₹18,00,000 cap, 8 interconnected milestones.
-  - `community-sangeet`: 200 guests, ₹7,50,000 cap.
-  - `intimate-roka`: 80 guests, ₹2,50,000 cap.
-- **Navigation Tabs (`WorkspaceTab`)**:
-  - `"overview"`: Executive summary, `PendingTaskStrip`, `TaskDependencyGraph`, and `ActivityLoopLogger`.
-  - `"budget"`: Category ledger, Verified vs Estimate toggles, and `GuestBufferCalculator`.
-  - `"vendor"`: `VendorAuditor` (plain-text quote normalization + WhatsApp negotiation).
-  - `"tradeoffs"`: Strategic budget rebalancing (`TradeoffDrawer`).
-  - `"milestones"`: Full topological task list, `TMinusCascadeHub`, and RFC 5545 `.ics` export.
-  - `"sos"`: Emergency Day-Of Cash & Lifafa reconciliation (`SosCashLedger`).
-
----
-
-## 3. Dual Path Convention (`lib/` vs `src/lib/`)
-
-To ensure compatibility across both root-level imports (`../lib/...`) and Vite `src/` imports (`./lib/services/...`), the following service modules are mirrored:
-- `lib/services/event-logger.ts` ↔ `src/lib/services/event-logger.ts`
-- `lib/services/communication.ts` ↔ `src/lib/services/communication.ts`
-
-When modifying `communication.ts` or `event-logger.ts`, ensure both paths stay synchronized (or re-export from `lib/services/*`).
+- **Deterministic Evaluation Engine (`src/lib/plannerEngine.ts`)**:
+  Calculates all budget totals, guest scaling, milestone DAG orders, and triage tiers synchronously in `<5ms`.
+- **Three Evaluator Presets (`src/lib/presets.ts`)**:
+  - `presetA` — **Sharma Family Wedding**: 350 guests, ₹18,00,000 budget cap, 8 milestones (Tier 1 Overrun).
+  - `presetB` — **50th Milestone Anniversary**: 120 guests, ₹6,50,000 budget cap, 6 milestones (Tier 2 Bottleneck).
+  - `presetC` — **Neighborhood Cultural Utsav**: 600 guests, ₹12,00,000 budget cap, 8 milestones (Tier 3 Clarification).
+- **Custom Event Guided Intake (`+ Plan Custom Event`)**:
+  Allows users/judges to input custom title, occasion, budget cap, guest count, days remaining, vibe, and must-have priorities, generating a balanced 6-category plan and 6-step DAG dynamically in `<5ms`.
+- **Topic Navigation Tabs**:
+  - `"overview"`: Executive dashboard, triage alert banner, high-level metrics, and quick actions.
+  - `"budget"`: 6-category allocation cards, dynamic per-plate scaling, verified vs estimate toggles, and 1-click trade-off rebalancing.
+  - `"milestones"`: Topological dependency list, critical path bottleneck alerts, status cycling, and RFC 5545 `.ics` export.
+  - `"vendor"`: Plain-text vendor quote auditor, hidden fee detection, negotiation questions, and 1-click WhatsApp dispatch.
 
 ---
 
-## 4. Topological Dependency Graph (`lib/engine/dependency-graph.ts`)
+## 3. Unified Codebase Architecture (`src/` Single Source of Truth)
 
-- Uses **Kahn's Algorithm** (in-degree tracking + queue traversal) to topologically sort tasks.
-- Detects circular dependencies (`CycleDetectedError`) before rendering.
+All active source code strictly resides inside `src/` and `server.ts`. Legacy root directories (`lib/`, `components/`, `app/`) have been eliminated:
+- `src/lib/plannerEngine.ts`: Single source of truth for all mathematical and DAG logic.
+- `src/lib/presets.ts`: Evaluator scenario presets.
+- `src/lib/services/secure-llm-client.ts`: Server-side Gemini LLM client with guardrails.
+- `src/lib/services/event-logger.ts`: 100% ephemeral in-memory communication activity logger.
+- `src/lib/services/planner-route.ts`: API route execution handler.
+- `src/types/schemas.ts`: Strict Zod runtime validation schemas.
+- `src/types/planner.ts`: Core TypeScript domain contracts.
+
+---
+
+## 4. Topological Dependency Graph & Kahn's Algorithm
+
+- Implemented in `src/lib/plannerEngine.ts` via `sortMilestonesTopologically()`.
+- Uses **Kahn's Algorithm** (in-degree tracking + queue traversal) to order milestones.
+- Detects circular dependencies (`hasCircularDependency`) before rendering.
 - Computes:
-  - **Blocked status**: A task is blocked if any ID in `task.dependsOn` has `status !== "completed"`.
-  - **Downstream impact count**: Number of transitive tasks that depend on a given node.
-- Visualized in `components/timeline/TaskDependencyGraph.tsx` as a horizontal left-to-right flow grouped into T-Minus columns (`T-30d+`, `T-7d`, `T-1d`, `Day-Of`).
+  - **Blocked status**: A milestone is blocked if any prerequisite in `task.dependsOn` is not marked `"completed"`.
+  - **Critical path bottlenecks**: Pending tasks that block 1 or more downstream tasks and have tight deadlines (< 7 days).

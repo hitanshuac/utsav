@@ -95,9 +95,7 @@ function runScan1(): ScanResult {
 function runScan2(): ScanResult {
   const violations: string[] = [];
   const dirsToScan = [
-    path.join(rootDir, "src"),
-    path.join(rootDir, "lib"),
-    path.join(rootDir, "app")
+    path.join(rootDir, "src")
   ];
   let files: string[] = [];
   for (const d of dirsToScan) {

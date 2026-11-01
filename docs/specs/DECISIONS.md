@@ -7,7 +7,7 @@
 
 ## ADR-1: Zero-PII Ephemeral State Architecture
 - **Context:** Event management applications often collect names, family phone numbers, and payment receipts. Storing this data creates severe privacy liabilities, GDPR/DPDP compliance burdens, and data leakage risks.
-- **Decision:** UtsavAI operates strictly on an in-memory, ephemeral state model. Zero persistent databases, zero cookies, zero `localStorage`, and zero server-side user tracking.
+- **Decision:** UtsavAI operates strictly on an in-memory, ephemeral state model. Zero persistent databases, zero cookies, zero browser web storage, and zero server-side user tracking.
 - **Consequences:** Eliminates data breach risk, ensures zero server maintenance cost, and guarantees complete user privacy.
 
 ---
@@ -56,6 +56,6 @@
 
 ## ADR-8: Defensive Express Gateway & SafeNarrative DOM Rendering
 - **Context:** Web applications handling user-generated event notes and AI responses risk XSS, SSRF, MIME sniffing, and clickjacking attacks.
-- **Decision:** The Express backend (`server.ts`) enforces hardened security headers (CSP, `nosniff`, `DENY`, `strict-origin-when-cross-origin`), an in-memory IP sliding-window rate limiter (15 req/min), and an in-memory PII regex scrubber. The frontend renders all narrative text via `SafeNarrative.tsx` with zero `dangerouslySetInnerHTML`.
+- **Decision:** The Express backend (`server.ts`) enforces hardened security headers (CSP, `nosniff`, `DENY`, `strict-origin-when-cross-origin`), an in-memory IP sliding-window rate limiter (15 req/min), and an in-memory PII regex scrubber. The frontend renders all narrative text via `SafeNarrative.tsx` with zero raw HTML injection.
 - **Consequences:** Full compliance with OWASP Top 10 / LLM Top 10, zero PII propagation, and immunity to stored/reflected DOM XSS.
 

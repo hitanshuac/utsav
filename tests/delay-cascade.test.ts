@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { computeDelayCascade, buildWhatsAppReminderUrl } from "../lib/engine/delay-cascade";
-import { MilestoneTask } from "../lib/types";
+import { computeDelayCascade, buildWhatsAppReminderUrl } from "../src/lib/engine/delay-cascade";
+import { MilestoneTask } from "../src/types/planner";
 
 describe("T-Minus Delay Cascade Engine", () => {
   const sampleTasks: MilestoneTask[] = [

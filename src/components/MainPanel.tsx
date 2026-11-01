@@ -19,6 +19,9 @@ import {
 import { TopicTabId } from "./TopicTabs";
 import { auditVendorQuoteOffline, generateWhatsAppLink } from "../lib/plannerEngine";
 import { SafeNarrative } from "./SafeNarrative";
+import { VisualDependencyFlowchart } from "./VisualDependencyFlowchart";
+import { ActivityHistoryPanel } from "./ActivityHistoryPanel";
+import { logActivityEvent } from "../lib/services/event-logger";
 
 interface MainPanelProps {
   activeTab: TopicTabId;
@@ -37,9 +40,13 @@ interface MainPanelProps {
   onApplyTradeoff: (strategy: TradeoffStrategy) => void;
   onToggleVerified: (itemId: string) => void;
   onCycleTaskStatus: (taskId: string) => void;
+  onUpdateTaskStatus?: (taskId: string, status: "pending" | "in_progress" | "completed") => void;
   vendorPhone: string;
   sampleVendorNote: string;
   filterQuery: string;
+  daysRemaining?: number;
+  eventTitle?: string;
+  onActionTriggered?: (actionName: string, explanation: string, deltas?: any[]) => void;
 }
 
 export const MainPanel: FC<MainPanelProps> = ({
@@ -54,13 +61,18 @@ export const MainPanel: FC<MainPanelProps> = ({
   totalBudgetCap,
   totalAllocated,
   variance,
+  triageTier,
   tradeoffs,
   onApplyTradeoff,
   onToggleVerified,
   onCycleTaskStatus,
+  onUpdateTaskStatus,
   vendorPhone,
   sampleVendorNote,
-  filterQuery
+  filterQuery,
+  daysRemaining = 30,
+  eventTitle = "Celebration",
+  onActionTriggered
 }) => {
   // Vendor Auditor local state
   const [vendorNote, setVendorNote] = useState<string>(sampleVendorNote);
@@ -71,6 +83,37 @@ export const MainPanel: FC<MainPanelProps> = ({
   const handleAudit = () => {
     const result = auditVendorQuoteOffline(vendorNote);
     setVendorAudit(result);
+    logActivityEvent({
+      taskId: "vendor-audit",
+      taskTitle: `Audited Vendor Quote: ${result.vendorName}`,
+      category: "miscellaneous",
+      channel: "system",
+      vendorName: result.vendorName,
+      recipient: "Coordinator Ops",
+      summary: `Audited ₹${result.quotedAmount.toLocaleString("en-IN")} quote. Detected ${result.flaggedHiddenCosts.length} potential hidden cost risk(s).`,
+      loopStatus: "closed"
+    });
+    if (onActionTriggered) {
+      onActionTriggered(
+        `Audited Vendor Quote: ${result.vendorName}`,
+        `Deterministic quote audit identified ₹${result.quotedAmount.toLocaleString("en-IN")} base amount with ${result.flaggedHiddenCosts.length} flagged risk items.`,
+        [
+          {
+            label: "Detected Base Amount",
+            before: "—",
+            after: `₹${result.quotedAmount.toLocaleString("en-IN")}`,
+            diff: "Audited"
+          },
+          {
+            label: "Flagged Hidden Costs",
+            before: "0",
+            after: `${result.flaggedHiddenCosts.length} items`,
+            diff: result.flaggedHiddenCosts.length > 0 ? "Risks Flagged" : "Clear",
+            isImprovement: result.flaggedHiddenCosts.length === 0
+          }
+        ]
+      );
+    }
   };
 
   const query = filterQuery.toLowerCase();
@@ -82,16 +125,6 @@ export const MainPanel: FC<MainPanelProps> = ({
       b.category.toLowerCase().includes(query) ||
       (b.notes && b.notes.toLowerCase().includes(query))
   );
-
-  // Map topological order to tasks
-  const orderedMilestones = topologicalOrder
-    .map((id) => milestones.find((m) => m.id === id))
-    .filter((m): m is MilestoneTask => !!m)
-    .filter(
-      (m) =>
-        m.title.toLowerCase().includes(query) ||
-        m.category.toLowerCase().includes(query)
-    );
 
   const showBudget = activeTab === "overview" || activeTab === "budget";
   const showDag = activeTab === "overview" || activeTab === "dag";
@@ -143,14 +176,25 @@ export const MainPanel: FC<MainPanelProps> = ({
                   ? Math.round(item.allocatedAmount / guestCount)
                   : null;
 
+              const isCardCritical =
+                (triageTier === "CRITICAL_OVERRUN" || variance < 0) &&
+                (item.isEstimate || (item.category === "catering" && guestCount > baseGuestCount) || item.allocatedAmount > totalBudgetCap * 0.35);
+
               return (
                 <div
                   key={item.id}
-                  className="bg-white border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between hover:border-slate-300 transition-colors shadow-xs"
+                  className={`rounded-xl p-3.5 flex flex-col justify-between transition-colors shadow-xs ${
+                    isCardCritical
+                      ? "critical-flash-card"
+                      : "bg-white border border-slate-200 hover:border-slate-300"
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
                       <div className="flex items-center gap-2">
+                        {isCardCritical && (
+                          <span className="critical-pulse-dot shrink-0" aria-hidden="true" />
+                        )}
                         <span className="text-xs font-bold text-slate-900">{item.label}</span>
                       </div>
                       <span className="text-[11px] font-mono uppercase text-slate-500">
@@ -197,7 +241,11 @@ export const MainPanel: FC<MainPanelProps> = ({
 
           {/* AI / Deterministic Trade-off Strategies List */}
           {variance < 0 && tradeoffs.length > 0 && (
-            <div className="bg-rose-50/70 border border-rose-200 rounded-xl p-4">
+            <div
+              className="bg-rose-50/70 border border-rose-200 rounded-xl p-4"
+              aria-live="polite"
+              aria-busy="false"
+            >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-rose-600" aria-hidden="true" />
@@ -247,102 +295,18 @@ export const MainPanel: FC<MainPanelProps> = ({
         </section>
       )}
 
-      {/* SECTION 2: CHRONOLOGICAL MILESTONE DAG LIST */}
+      {/* SECTION 2: INTERACTIVE VISUAL DEPENDENCY FLOWCHART */}
       {showDag && (
-        <section
-          aria-labelledby="milestone-dag-title"
-          className="utsav-card"
-        >
-          <div className="utsav-card-header">
-            <div>
-              <h2 id="milestone-dag-title" className="utsav-card-title flex items-center gap-2">
-                <span>Milestone Dependency Graph (DAG)</span>
-                <span className="text-xs font-normal text-slate-500 font-mono">
-                  (Kahn&apos;s Topological Sort Order)
-                </span>
-              </h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-mono">
-                {milestones.filter((m) => m.status === "completed").length}/{milestones.length} Completed
-              </span>
-              {bottlenecks.length > 0 && (
-                <span className="utsav-badge utsav-badge-timeline">
-                  {bottlenecks.length} Bottleneck(s)
-                </span>
-              )}
-            </div>
-          </div>
-
-          <p className="text-xs text-slate-600 mb-4 leading-relaxed">
-            Per <code className="bg-slate-100 px-1 py-0.5 rounded font-mono">ADR-3</code>, milestone prerequisites are resolved using Kahn&apos;s algorithm. Tasks with unsatisfied prerequisites cannot be completed until parent locks clear.
-          </p>
-
-          <div className="flex flex-col gap-2.5">
-            {orderedMilestones.map((task, idx) => {
-              const isBottleneck = bottlenecks.includes(task.id);
-              const hasUncompletedPrereq = task.dependsOn.some((pId) => {
-                const parent = milestones.find((m) => m.id === pId);
-                return parent && parent.status !== "completed";
-              });
-
-              return (
-                <div
-                  key={task.id}
-                  className={`bg-white border rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors shadow-xs ${
-                    isBottleneck
-                      ? "border-amber-400 bg-amber-50/30"
-                      : "border-slate-200 hover:border-slate-300"
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs shrink-0 font-mono">
-                      {idx + 1}
-                    </span>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-bold text-slate-900">{task.title}</span>
-                        {hasUncompletedPrereq && (
-                          <span className="inline-flex items-center gap-1 text-[10px] text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded font-medium">
-                            <Lock className="w-3 h-3 text-amber-600" aria-hidden="true" />
-                            <span>Prereq Locked ({task.dependsOn.join(", ")})</span>
-                          </span>
-                        )}
-                        {isBottleneck && (
-                          <span className="utsav-badge utsav-badge-timeline text-[10px]">
-                            Critical Path Delay
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-slate-500 mt-0.5 font-mono">
-                        Lead Time: <strong>{task.leadTimeDays || task.deadlineDaysBeforeEvent} days</strong> · Category: {task.category}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                    <button
-                      type="button"
-                      onClick={() => onCycleTaskStatus(task.id)}
-                      className={`utsav-btn text-xs px-2.5 py-1 font-semibold ${
-                        task.status === "completed"
-                          ? "utsav-badge-ontrack border-emerald-300"
-                          : task.status === "in_progress"
-                          ? "utsav-badge-timeline border-amber-300"
-                          : "bg-slate-100 text-slate-700 border-slate-300"
-                      }`}
-                    >
-                      {task.status === "completed" && <CheckCircle2Icon className="w-3.5 h-3.5" />}
-                      {task.status === "pending" && hasUncompletedPrereq && <Lock className="w-3.5 h-3.5" />}
-                      {task.status === "pending" && !hasUncompletedPrereq && <Unlock className="w-3.5 h-3.5" />}
-                      <span className="capitalize">{task.status.replace("_", " ")}</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
+        <VisualDependencyFlowchart
+          milestones={milestones}
+          topologicalOrder={topologicalOrder}
+          bottlenecks={bottlenecks}
+          daysRemaining={daysRemaining}
+          eventTitle={eventTitle}
+          onCycleTaskStatus={onCycleTaskStatus}
+          onUpdateTaskStatus={onUpdateTaskStatus}
+          onActionTriggered={onActionTriggered}
+        />
       )}
 
       {/* SECTION 3: PLAIN-TEXT VENDOR QUOTE AUDITOR */}
@@ -388,7 +352,11 @@ export const MainPanel: FC<MainPanelProps> = ({
           </div>
 
           {/* Audit Results Card */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+          <div
+            className="bg-slate-50 border border-slate-200 rounded-xl p-4"
+            aria-live="polite"
+            aria-busy="false"
+          >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3 mb-3">
               <div>
                 <strong className="text-xs font-bold text-slate-900 block">
@@ -406,16 +374,21 @@ export const MainPanel: FC<MainPanelProps> = ({
               </span>
             </div>
 
-            {/* Flagged Hidden Costs */}
+            {/* Flagged Hidden Costs with Critical Pulsing Highlight */}
             <div className="mb-3">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900 mb-1.5">
-                <AlertCircle className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />
+              <div className="flex items-center gap-1.5 text-xs font-bold text-rose-900 mb-1.5">
+                <span className="critical-pulse-dot" aria-hidden="true" />
+                <AlertCircle className="w-3.5 h-3.5 text-rose-600" aria-hidden="true" />
                 <span>Flagged Potential Hidden Costs:</span>
               </div>
-              <ul className="text-xs text-slate-700 list-disc list-inside space-y-1">
+              <ul className="text-xs text-slate-700 space-y-1.5">
                 {vendorAudit.flaggedHiddenCosts.map((cost, cIdx) => (
-                  <li key={cIdx} className="text-[11px] leading-snug">
-                    {cost}
+                  <li
+                    key={cIdx}
+                    className="critical-flash-card rounded-lg p-2 text-[11px] leading-snug flex items-start gap-2"
+                  >
+                    <span className="critical-pulse-dot mt-1 shrink-0" aria-hidden="true" />
+                    <span>{cost}</span>
                   </li>
                 ))}
               </ul>
@@ -443,6 +416,18 @@ export const MainPanel: FC<MainPanelProps> = ({
                         href={waUrl}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={() => {
+                          logActivityEvent({
+                            taskId: "vendor-question",
+                            taskTitle: `Dispatched Negotiation Question #${qIdx + 1}`,
+                            category: "miscellaneous",
+                            channel: "whatsapp",
+                            vendorName: vendorAudit.vendorName,
+                            recipient: vendorPhone,
+                            summary: `Dispatched question on WhatsApp: "${q}"`,
+                            loopStatus: "awaiting_call"
+                          });
+                        }}
                         className="utsav-btn bg-emerald-600 text-white hover:bg-emerald-700 text-[11px] px-2.5 py-1 font-semibold shrink-0 flex items-center gap-1"
                         aria-label={`Send question ${qIdx + 1} to vendor on WhatsApp`}
                       >
@@ -456,6 +441,11 @@ export const MainPanel: FC<MainPanelProps> = ({
             </div>
           </div>
         </section>
+      )}
+
+      {/* SECTION 4: LIVE ACTIVITY & LOOP-CLOSURE AUDIT HISTORY */}
+      {activeTab === "activity" && (
+        <ActivityHistoryPanel isEmbedded={true} />
       )}
     </div>
   );

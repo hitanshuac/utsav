@@ -20,8 +20,9 @@ import {
   PlanningTriageTier
 } from "../types/planner";
 import { generateIcsCalendar, generateWhatsAppLink } from "./actionDispatchers";
+import { sortMilestonesTopologically } from "./engine/dependency-graph";
 
-export { generateIcsCalendar, generateWhatsAppLink };
+export { generateIcsCalendar, generateWhatsAppLink, sortMilestonesTopologically };
 
 /**
  * Category scaling configuration.
@@ -34,6 +35,13 @@ export const VARIABLE_CATEGORIES: ReadonlySet<EventCategory> = new Set([
 
 /**
  * Scales budget items dynamically based on guest count ratio.
+ * Variable categories (catering, logistics) scale with guest count delta;
+ * fixed categories (venue, photography, decor) remain invariant.
+ *
+ * @param budgetItems - Initial list of allocated category budget items
+ * @param guestCount - Current/revised total guest headcount
+ * @param baseGuestCount - Baseline headcount from initial plan
+ * @returns Array of scaled category allocations
  */
 export function scaleBudgetCategories(
   budgetItems: BudgetItem[],
@@ -72,6 +80,10 @@ export function scaleBudgetCategories(
 
 /**
  * Computes exact budget variance and financial triage status.
+ *
+ * @param scaledCategories - Array of category items with allocated amounts
+ * @param budgetCap - Authorized total budget ceiling in INR
+ * @returns Financial breakdown containing totalAllocated, variance, and overrunAmount
  */
 export function computeBudgetTotals(scaledCategories: ScaledCategory[], budgetCap: number) {
   const totalAllocated = scaledCategories.reduce((sum, c) => sum + c.allocatedAmount, 0);
@@ -90,6 +102,10 @@ export function computeBudgetTotals(scaledCategories: ScaledCategory[], budgetCa
 /**
  * Topological Sort & Dependency Resolution using Kahn's Algorithm.
  * Identifies critical-path bottlenecks and handles cyclic dependencies gracefully.
+ *
+ * @param milestones - Milestone task list with dependencies
+ * @param daysRemaining - Days remaining until the event execution date
+ * @returns Resolved topological execution order, bottleneck task IDs, and cycle status
  */
 export function resolveMilestoneDAG(
   milestones: MilestoneTask[],
@@ -172,6 +188,13 @@ export function resolveMilestoneDAG(
 
 /**
  * Computes deterministic 0-100 continuous Urgency Score per PRODUCT_SPEC.md.
+ *
+ * @param totalAllocated - Current sum of category allocations in INR
+ * @param budgetCap - Authorized budget ceiling in INR
+ * @param bottlenecks - Array of milestone task IDs flagged as bottlenecks
+ * @param unverifiedCount - Number of budget items retaining isEstimate: true
+ * @param maxLeadTimeDeficitDays - Maximum deadline gap in days (default: 0)
+ * @returns Numeric urgency score bounded between 0 and 100
  */
 export function computeUrgencyScore(
   totalAllocated: number,
@@ -205,7 +228,11 @@ export function computeUrgencyScore(
 }
 
 /**
- * Top-level deterministic event evaluation.
+ * Top-level deterministic event evaluation engine.
+ * Single source of truth for budget scaling, DAG ordering, and triage tier calculation.
+ *
+ * @param input - Complete event planning input containing items and milestones
+ * @returns Comprehensive evaluation result with triage tier, metrics, and sorted DAG
  */
 export function evaluateEventPlan(input: EventPlanInput): PlannerEvaluationResult {
   const scaledCategories = scaleBudgetCategories(
@@ -266,6 +293,11 @@ export function evaluateEventPlan(input: EventPlanInput): PlannerEvaluationResul
  * Offline Deterministic Trade-Off Strategy Generator.
  * Computes 3 mathematical trade-off options in <5ms ("Experience First", "Strict Budget Cap", "Guest Trim")
  * so the app functions 100% offline without an API key.
+ *
+ * @param deficit - Budget overrun deficit amount to absorb in INR
+ * @param scaledCategories - Current category allocations after headcount scaling
+ * @param _vibe - Optional priority vibe preference
+ * @returns Array of structured trade-off options with exact category adjustments
  */
 export function generateDeterministicTradeoffs(
   deficit: number,
@@ -369,6 +401,9 @@ export function generateDeterministicTradeoffs(
  * 3. Cleaning / porterage
  * 4. Overtime rates
  * 5. Advance deposit %
+ *
+ * @param vendorNote - Raw plain-text quotation, invoice breakdown, or message
+ * @returns Normalized vendor audit result with inclusions, hidden costs, and negotiation questions
  */
 export function auditVendorQuoteOffline(vendorNote: string): VendorAuditResult {
   const lower = vendorNote.toLowerCase();
@@ -469,3 +504,189 @@ export function auditVendorQuoteOffline(vendorNote: string): VendorAuditResult {
 
 export const preAuditVendorQuote = auditVendorQuoteOffline;
 
+/**
+ * Custom Event Guided Intake — Deterministic Budget & DAG Generator.
+ * Generates a customized 6-category budget allocation and 6-step milestone DAG
+ * based on user inputs, boosting the selected Must-Have category by +10%.
+ * Execution time: <5ms deterministic.
+ */
+export type OccasionType =
+  | "Wedding"
+  | "Milestone Birthday / Anniversary"
+  | "Cultural / Community Fest"
+  | "Corporate / Retreat";
+
+export type MustHavePriority =
+  | "Food & Catering"
+  | "Venue & Comfort"
+  | "Decor & Ambience"
+  | "Photography & Memories";
+
+export type DietaryProfile =
+  | "Standard Multi-Cuisine"
+  | "Jain (No Onion/Garlic)"
+  | "Vegan / Plant-Based"
+  | "Traditional Regional";
+
+export type GuestAccessibility =
+  | "Standard Seating"
+  | "Children + Senior Citizen Friendly (Ramps & Rest Zones)"
+  | "Full Wheelchair & Assisted Mobility";
+
+export interface CustomEventInput {
+  eventTitle: string;
+  occasionType: OccasionType;
+  totalBudgetCap: number;
+  guestCount: number;
+  daysUntilEvent: number;
+  priorityVibe: "Experience First" | "Budget Strict" | "Balanced";
+  mustHavePriority: MustHavePriority;
+  dietaryProfile?: DietaryProfile;
+  guestAccessibility?: GuestAccessibility;
+}
+
+export type CustomEventIntakeInput = CustomEventInput;
+
+/** Maps Must-Have Priority selection to the budget category that receives the +10% boost. */
+const MUST_HAVE_TO_CATEGORY: Record<MustHavePriority, EventCategory> = {
+  "Food & Catering": "catering",
+  "Venue & Comfort": "venue",
+  "Decor & Ambience": "decor",
+  "Photography & Memories": "photography"
+};
+
+/** Baseline allocation ratios for each occasion type (must sum to 1.0). */
+const OCCASION_RATIOS: Record<OccasionType, Record<EventCategory, number>> = {
+  Wedding: { venue: 0.30, catering: 0.30, decor: 0.15, photography: 0.12, logistics: 0.08, miscellaneous: 0.05 },
+  "Milestone Birthday / Anniversary": { venue: 0.25, catering: 0.30, decor: 0.15, photography: 0.15, logistics: 0.08, miscellaneous: 0.07 },
+  "Cultural / Community Fest": { venue: 0.20, catering: 0.35, decor: 0.12, photography: 0.08, logistics: 0.18, miscellaneous: 0.07 },
+  "Corporate / Retreat": { venue: 0.30, catering: 0.25, decor: 0.10, photography: 0.10, logistics: 0.18, miscellaneous: 0.07 }
+};
+
+/** Maps occasion type to relevant milestone templates. */
+const OCCASION_MILESTONES: Record<OccasionType, Array<{ suffix: string; category: EventCategory; deadlineRatio: number; urgency: "low" | "medium" | "critical" }>> = {
+  Wedding: [
+    { suffix: "Lock Venue & Sign Agreement", category: "venue", deadlineRatio: 0.75, urgency: "critical" },
+    { suffix: "Finalize Caterer & Menu Tasting", category: "catering", deadlineRatio: 0.50, urgency: "critical" },
+    { suffix: "Approve Decor & Floral Design", category: "decor", deadlineRatio: 0.38, urgency: "medium" },
+    { suffix: "Confirm Photography & Cinema Crew", category: "photography", deadlineRatio: 0.25, urgency: "medium" },
+    { suffix: "Dispatch Guest Transport Roster", category: "logistics", deadlineRatio: 0.12, urgency: "medium" },
+    { suffix: "Final Headcount & Handover Briefing", category: "catering", deadlineRatio: 0.05, urgency: "critical" }
+  ],
+  "Milestone Birthday / Anniversary": [
+    { suffix: "Book Venue & Reserve Date", category: "venue", deadlineRatio: 0.70, urgency: "critical" },
+    { suffix: "Confirm Multi-Course Menu", category: "catering", deadlineRatio: 0.45, urgency: "critical" },
+    { suffix: "Design Nostalgia Photo Wall", category: "decor", deadlineRatio: 0.35, urgency: "medium" },
+    { suffix: "Schedule Portrait & Film Session", category: "photography", deadlineRatio: 0.25, urgency: "medium" },
+    { suffix: "Arrange Guest Welcome & Sound", category: "logistics", deadlineRatio: 0.12, urgency: "low" },
+    { suffix: "Final Guest RSVP & Favors Prep", category: "miscellaneous", deadlineRatio: 0.05, urgency: "medium" }
+  ],
+  "Cultural / Community Fest": [
+    { suffix: "Obtain Municipal Permit & NOC", category: "venue", deadlineRatio: 0.80, urgency: "critical" },
+    { suffix: "Lock Bulk Caterer Contract", category: "catering", deadlineRatio: 0.50, urgency: "critical" },
+    { suffix: "Erect Stage & PA Sound Rig", category: "decor", deadlineRatio: 0.35, urgency: "critical" },
+    { suffix: "Inspect Generator & Power Grid", category: "logistics", deadlineRatio: 0.20, urgency: "critical" },
+    { suffix: "Assign Volunteer Crew Roster", category: "logistics", deadlineRatio: 0.12, urgency: "medium" },
+    { suffix: "Final Community Headcount Check", category: "catering", deadlineRatio: 0.04, urgency: "critical" }
+  ],
+  "Corporate / Retreat": [
+    { suffix: "Reserve Conference Venue", category: "venue", deadlineRatio: 0.70, urgency: "critical" },
+    { suffix: "Confirm Catering & Dietary Menus", category: "catering", deadlineRatio: 0.45, urgency: "critical" },
+    { suffix: "Setup AV & Projection Equipment", category: "decor", deadlineRatio: 0.30, urgency: "medium" },
+    { suffix: "Book Event Photographer", category: "photography", deadlineRatio: 0.20, urgency: "low" },
+    { suffix: "Arrange Team Transport & Parking", category: "logistics", deadlineRatio: 0.12, urgency: "medium" },
+    { suffix: "Distribute Agenda & Name Badges", category: "miscellaneous", deadlineRatio: 0.05, urgency: "low" }
+  ]
+};
+
+export interface CustomEventResult {
+  budget: BudgetItem[];
+  budgetItems: BudgetItem[];
+  milestones: MilestoneTask[];
+}
+
+/**
+ * Custom Event Guided Intake — Deterministic Budget & DAG Generator.
+ * Generates a customized 6-category budget allocation and 6-step milestone DAG
+ * based on user inputs, boosting the selected Must-Have category by +10%
+ * and embedding dietary profile and guest accessibility requirements.
+ *
+ * @param input - Custom event intake parameters including occasion, budget, pax, and needs
+ * @returns Complete custom budget items and sequenced milestone DAG
+ */
+export function generateCustomEventPlan(input: CustomEventInput): CustomEventResult {
+  const baseRatios = { ...OCCASION_RATIOS[input.occasionType] };
+  const boostCategory = MUST_HAVE_TO_CATEGORY[input.mustHavePriority];
+
+  // Apply +10% boost to the must-have category, proportionally reduce others
+  const boostAmount = 0.10;
+  const originalBoostRatio = baseRatios[boostCategory];
+  const newBoostRatio = Math.min(0.60, originalBoostRatio + boostAmount);
+  const actualBoost = newBoostRatio - originalBoostRatio;
+
+  // Proportionally reduce remaining categories
+  const otherCategories = (Object.keys(baseRatios) as EventCategory[]).filter(c => c !== boostCategory);
+  const otherSum = otherCategories.reduce((s, c) => s + baseRatios[c], 0);
+
+  const adjustedRatios: Record<EventCategory, number> = { ...baseRatios };
+  adjustedRatios[boostCategory] = newBoostRatio;
+  for (const cat of otherCategories) {
+    adjustedRatios[cat] = baseRatios[cat] - (baseRatios[cat] / otherSum) * actualBoost;
+  }
+
+  // Generate budget items
+  const categories: EventCategory[] = ["venue", "catering", "decor", "photography", "logistics", "miscellaneous"];
+  const categoryLabels: Record<EventCategory, string> = {
+    venue: "Event Venue & Space",
+    catering: `Feast & Dining (${input.guestCount} pax)`,
+    decor: "Stage, Decor & Ambience",
+    photography: "Photography & Memories",
+    logistics: "Logistics & Transport",
+    miscellaneous: "Emergency Buffer & Extras"
+  };
+
+  const budgetItems: BudgetItem[] = categories.map((cat, idx) => {
+    const allocatedAmount = Math.round(input.totalBudgetCap * adjustedRatios[cat]);
+    let notes = cat === boostCategory ? `+10% Must-Have boost applied (${input.mustHavePriority})` : "AI-generated estimate";
+    if (cat === "catering" && input.dietaryProfile) {
+      notes += ` · Dietary: ${input.dietaryProfile}`;
+    }
+    if (cat === "logistics" && input.guestAccessibility) {
+      notes += ` · Accessibility: ${input.guestAccessibility}`;
+    }
+    return {
+      id: `custom-${idx + 1}`,
+      category: cat,
+      label: categoryLabels[cat],
+      allocatedAmount,
+      actualAmount: 0,
+      isEstimate: true,
+      notes
+    };
+  });
+
+  // Guarantee exact penny matching with zero rounding drift
+  const currentSum = budgetItems.reduce((acc, curr) => acc + curr.allocatedAmount, 0);
+  const diff = input.totalBudgetCap - currentSum;
+  if (diff !== 0 && budgetItems.length > 0) {
+    budgetItems[0].allocatedAmount += diff;
+  }
+
+  // Generate milestone DAG
+  const milestoneTemplates = OCCASION_MILESTONES[input.occasionType];
+  const milestones: MilestoneTask[] = milestoneTemplates.map((tmpl, idx) => {
+    const deadlineDays = Math.max(1, Math.round(input.daysUntilEvent * tmpl.deadlineRatio));
+    return {
+      id: `cm-${idx + 1}`,
+      title: tmpl.suffix,
+      deadlineDaysBeforeEvent: deadlineDays,
+      category: tmpl.category,
+      dependsOn: idx === 0 ? [] : [`cm-${idx}`],
+      status: "pending" as const,
+      urgency: tmpl.urgency,
+      leadTimeDays: deadlineDays
+    };
+  });
+
+  return { budget: budgetItems, budgetItems, milestones };
+}

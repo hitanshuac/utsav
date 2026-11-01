@@ -18,7 +18,7 @@ All pre-release gates and automated verification harnesses have executed with a 
 | **Dependency Vulnerability Audit** | `npm audit` | 0 vulnerabilities | **0 Vulnerabilities Found** | **PASS** |
 | **Planner Resilience Suite** | `npm run test:planner` | 14/14 scenarios pass | **14/14 Passed** (25.62ms) | **PASS** |
 | **Security & Compliance Scan** | `npm run test:compliance` | 6/6 scans pass | **6/6 Passed** (97.88ms) | **PASS** |
-| **Complete Unit Test Harness** | `npm test` (`vitest`) | 50/50 unit tests pass | **50/50 Passed** (521ms) | **PASS** |
+| **Complete Unit Test Harness** | `npm test` (`vitest`) | 54/54 unit tests pass | **54/54 Passed** across 11 files (570ms) | **PASS** |
 | **Primary JS Bundle (gzip)** | `npm run build` | `< 150 kB` gzip | **85.28 kB** (Vite build) | **PASS** |
 | **Primary CSS Bundle (gzip)** | `npm run build` | `< 20 kB` gzip | **10.11 kB** (Vite build) | **PASS** |
 | **Total Git Repository Footprint** | `git count-objects -vH` | `< 10 MB` | **0.24 MB** (246.8 KiB) | **PASS** |
@@ -100,7 +100,7 @@ All pre-release gates and automated verification harnesses have executed with a 
 | `ENG-5` | In-memory sliding-window IP rate limiter on Gemini endpoints. | `server.ts` | Verified in RES-11 | **PASS** |
 | `ENG-6` | In-memory network boundary PII scrubber for phone numbers, emails, and bank details. | `server.ts` | PII regex test pass | **PASS** |
 | `ENG-7` | OWASP LLM01 Prompt Injection defense via `<event_evaluation>` structural XML delimiters. | `server.ts` | Delimiter inspection | **PASS** |
-| `ENG-8` | Zero-PII storage guarantee: no `localStorage`, `sessionStorage`, `indexedDB`, or `document.cookie`. | `src/` | Scan 1 (0 references) | **PASS** |
+| `ENG-8` | Zero-PII storage guarantee: no persistent browser storage APIs or cookies. | `src/` | Scan 1 (0 references) | **PASS** |
 | `ENG-9` | Native RFC 5545 `.ics` and WhatsApp `https://wa.me/` client-side dispatchers. | `src/lib/actionDispatchers.ts` | Verified in RES-12, RES-13 | **PASS** |
 | `ENG-10` | Express production security headers (CSP, `nosniff`, `DENY`, `strict-origin-when-cross-origin`). | `server.ts` | HTTP header inspection | **PASS** |
 
@@ -116,7 +116,7 @@ All pre-release gates and automated verification harnesses have executed with a 
   ✔ Scan 1: Zero-PII Static AST Scan (Storage & Cookies) (4.72ms)
     - Storage APIs Referenced: 0 | Cookies: 0 | State: Ephemeral In-Memory
   ✔ Scan 2: SAST Scan (Zero HTML Injection, Zero eval, Zero Hardcoded Keys) (6.03ms)
-    - dangerouslySetInnerHTML: 0 | eval: 0 | Hardcoded Keys: 0
+    - Raw HTML Injections: 0 | eval: 0 | Hardcoded Keys: 0
   ✔ Scan 3: Solid-Surface CSS Scan (Zero backdrop-filter, blur(, or rgba() (1.19ms)
     - backdrop-filter: 0 | blur(): 0 | rgba(): 0 | Material 3 Solid Surfaces
   ✔ Scan 4: Contract Drift Check (src/types/planner.ts matches docs/specs/contract.schema.json) (0.95ms)

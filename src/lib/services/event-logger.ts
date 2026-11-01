@@ -1,4 +1,4 @@
-import { EventCategory, MilestoneTask } from "../../../lib/types";
+import { EventCategory, MilestoneTask } from "../../types/planner";
 
 export type ActivityChannel =
   | "whatsapp"
@@ -6,13 +6,16 @@ export type ActivityChannel =
   | "call"
   | "ai_followup"
   | "edge_case"
-  | "loop_closed";
+  | "loop_closed"
+  | "system";
 
 export type EdgeCaseTemplateType =
   | "standard"
   | "delay_shift"
   | "guest_surge"
-  | "backup_sos";
+  | "backup_sos"
+  | "delay_30m"
+  | "budget_surge";
 
 export type LoopStatus = "awaiting_call" | "closed";
 
@@ -166,6 +169,11 @@ export function logActivityEvent(
 }
 
 /**
+ * Direct alias for logActivityEvent
+ */
+export const logEventActivity = logActivityEvent;
+
+/**
  * Closes the loop on a task's pending activities via human call or AI follow-up.
  */
 export function closeTaskActivityLoop(params: {
@@ -288,7 +296,7 @@ export function buildEditableTemplate(
   const vendorName = task.vendorContact?.name || "Partner";
   const timing = task.timeSlot || `T-${task.deadlineDaysBeforeEvent}d`;
 
-  if (edgeCase === "delay_shift") {
+  if (edgeCase === "delay_shift" || edgeCase === "delay_30m") {
     const subject = `[TIMING SHIFT] ${eventTitle}: ${task.title} (${timing})`;
     const body =
       channel === "whatsapp"
@@ -301,7 +309,7 @@ export function buildEditableTemplate(
     };
   }
 
-  if (edgeCase === "guest_surge") {
+  if (edgeCase === "guest_surge" || edgeCase === "budget_surge") {
     const subject = `[+15% SURGE BUFFER] ${eventTitle}: ${task.title}`;
     const body =
       channel === "whatsapp"

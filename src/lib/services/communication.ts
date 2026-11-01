@@ -1,4 +1,4 @@
-import { EventCategory } from "../../../lib/types";
+import { EventCategory } from "../../types/planner";
 import { EdgeCaseTemplateType, logActivityEvent } from "./event-logger";
 
 export type CommunicationChannel = "whatsapp" | "email";

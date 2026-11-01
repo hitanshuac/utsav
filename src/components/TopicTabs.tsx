@@ -1,7 +1,7 @@
 import React from "react";
-import { LayoutDashboard, WalletCards, GitBranch, FileSearch } from "lucide-react";
+import { LayoutDashboard, WalletCards, GitBranch, FileSearch, Clock } from "lucide-react";
 
-export type TopicTabId = "overview" | "budget" | "dag" | "vendor";
+export type TopicTabId = "overview" | "budget" | "dag" | "vendor" | "activity";
 
 interface TopicTabsProps {
   activeTab: TopicTabId;
@@ -40,8 +40,35 @@ export const TopicTabs: React.FC<TopicTabsProps> = ({
       id: "vendor",
       label: "Vendor Quote Auditor",
       icon: <FileSearch className="w-4 h-4" aria-hidden="true" />
+    },
+    {
+      id: "activity",
+      label: "Activity & Loop History",
+      icon: <Clock className="w-4 h-4" aria-hidden="true" />
     }
   ];
+
+  const tabRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
+
+  const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
+    let nextIndex: number | null = null;
+    if (e.key === "ArrowRight") {
+      nextIndex = (index + 1) % tabs.length;
+    } else if (e.key === "ArrowLeft") {
+      nextIndex = (index - 1 + tabs.length) % tabs.length;
+    } else if (e.key === "Home") {
+      nextIndex = 0;
+    } else if (e.key === "End") {
+      nextIndex = tabs.length - 1;
+    }
+
+    if (nextIndex !== null) {
+      e.preventDefault();
+      const nextTab = tabs[nextIndex];
+      onTabChange(nextTab.id);
+      tabRefs.current[nextIndex]?.focus();
+    }
+  };
 
   return (
     <nav
@@ -49,17 +76,19 @@ export const TopicTabs: React.FC<TopicTabsProps> = ({
       role="tablist"
       aria-label="Event Execution Workspaces"
     >
-      {tabs.map((tab) => {
+      {tabs.map((tab, idx) => {
         const isActive = activeTab === tab.id;
         return (
           <button
             key={tab.id}
+            ref={(el) => { tabRefs.current[idx] = el; }}
             id={`tab-${tab.id}`}
             role="tab"
             aria-selected={isActive}
             aria-controls={`panel-${tab.id}`}
             tabIndex={isActive ? 0 : -1}
             onClick={() => onTabChange(tab.id)}
+            onKeyDown={(e) => handleKeyDown(e, idx)}
             className={`utsav-tab-btn whitespace-nowrap shrink-0 ${isActive ? "active" : ""}`}
           >
             {tab.icon}

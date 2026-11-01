@@ -1,7 +1,8 @@
-import React, { useState } from "react";
-import { Search, ChevronDown, Check, ShieldCheck } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Search, ChevronDown, Check, ShieldCheck, Clock } from "lucide-react";
 import { PersonaLens } from "../types/planner";
 import { JUDGE_PRESETS, JudgePreset } from "../lib/presets";
+import { getActivityEvents, subscribeToEventLogger } from "../lib/services/event-logger";
 
 interface AppBarProps {
   currentPersona: PersonaLens;
@@ -10,6 +11,7 @@ interface AppBarProps {
   onSelectPreset: (preset: JudgePreset) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  onOpenActivityHistory?: () => void;
 }
 
 export const AppBar: React.FC<AppBarProps> = ({
@@ -18,10 +20,19 @@ export const AppBar: React.FC<AppBarProps> = ({
   activePresetId,
   onSelectPreset,
   searchQuery,
-  onSearchChange
+  onSearchChange,
+  onOpenActivityHistory
 }) => {
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
+  const [activityCount, setActivityCount] = useState<number>(() => getActivityEvents().length);
+
+  useEffect(() => {
+    const updateCount = () => setActivityCount(getActivityEvents().length);
+    updateCount();
+    const unsubscribe = subscribeToEventLogger(updateCount);
+    return () => unsubscribe();
+  }, []);
 
   const personas: { id: PersonaLens; label: string; desc: string }[] = [
     { id: "family_host", label: "Family Host", desc: "Hospitality & Per-Plate Focus" },
@@ -182,6 +193,22 @@ export const AppBar: React.FC<AppBarProps> = ({
             </div>
           )}
         </div>
+
+        {/* Activity Log & History Button with Live Badge */}
+        {onOpenActivityHistory && (
+          <button
+            type="button"
+            onClick={onOpenActivityHistory}
+            className="utsav-btn bg-slate-900 hover:bg-slate-800 text-white text-xs px-2.5 py-1.5 font-semibold flex items-center gap-1.5 shadow-sm"
+            aria-label={`Activity Log and History (${activityCount} events recorded)`}
+          >
+            <Clock className="w-3.5 h-3.5 text-orange-400" aria-hidden="true" />
+            <span className="hidden sm:inline">Activity Log</span>
+            <span className="bg-orange-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold">
+              {activityCount}
+            </span>
+          </button>
+        )}
       </div>
     </header>
   );

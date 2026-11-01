@@ -3,11 +3,11 @@ import {
   sortMilestonesTopologically,
   canCompleteMilestone,
   computeScheduledMilestones
-} from "../lib/engine/dependency-graph";
-import { generateIcsCalendar } from "../lib/engine/calendar-utils";
-import { createWhatsAppDispatchLink } from "../components/vendor/WhatsAppAction";
-import { SecureLLMClient } from "../lib/security/secure-llm-client";
-import { MilestoneTask } from "../lib/types";
+} from "../src/lib/engine/dependency-graph";
+import { generateIcsCalendar } from "../src/lib/engine/calendar-utils";
+import { createWhatsAppDispatchLink } from "../src/lib/actionDispatchers";
+import { SecureLLMClient } from "../src/lib/services/secure-llm-client";
+import { MilestoneTask } from "../src/types/planner";
 
 describe("Topological Milestone Dependency Graph & Security Interceptors", () => {
   const sampleTasks: MilestoneTask[] = [

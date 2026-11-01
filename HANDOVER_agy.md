@@ -79,7 +79,7 @@ utsav-event-planner/
 - [x] Automated planner test harness (`npm run test:planner`): `14/14` tests pass (`100%`)
 - [x] Compliance scans (`npm run test:compliance`): `6/6` scans pass (`100%`)
 - [x] **Repository Footprint Gate**: `[PASS: < 10 MB]` & Single `main` branch verified
-- [x] **SAST & OWASP Top 10 Compliance Badge**: `[PASS: 0 VIOLATIONS]` (No XSS, no `dangerouslySetInnerHTML`, no hardcoded secrets)
+- [x] **SAST & OWASP Top 10 Compliance Badge**: `[PASS: 0 VIOLATIONS]` (No XSS, no raw HTML injection, no hardcoded secrets)
 - [x] **Defensive Boundary Whitelisting Badge**: `[PASS: 100% WHITELISTED]` (XML delimiters `<event_evaluation>`, strict JSON schema validation, HTTP security headers)
-- [x] **Zero-PII Invariant**: `[PASS: 100% IN-MEMORY]` (Zero `localStorage`, `sessionStorage`, `indexedDB`, or cookies)
+- [x] **Zero-PII Invariant**: `[PASS: 100% IN-MEMORY]` (Zero browser web storage, indexed database, or cookies)
 - [x] `QA_REPORT.md` verdict = **GO (Prompt Wars Challenge 5 Submission Ready)**

@@ -22,7 +22,7 @@ import {
 } from "../src/lib/plannerEngine";
 import { BudgetItem, MilestoneTask, EventPlanInput } from "../src/types/planner";
 import { createApp } from "../server";
-import { SecureLLMClient } from "../lib/security/secure-llm-client";
+import { SecureLLMClient } from "../src/lib/services/secure-llm-client";
 
 interface TestResult {
   id: string;
@@ -388,6 +388,7 @@ export async function runTestHarness() {
     process.exit(1);
   } else {
     console.log("\x1b[32m[PASS] All 14 Deterministic & Resilience Scenarios Verified Successfully.\x1b[0m\n");
+    process.exit(0);
   }
 }
 

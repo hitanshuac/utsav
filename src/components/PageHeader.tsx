@@ -1,5 +1,5 @@
 import React from "react";
-import { RotateCcw, Calendar, CheckCircle2 } from "lucide-react";
+import { RotateCcw, Calendar, CheckCircle2, Sparkles } from "lucide-react";
 import { PlanningTriageTier } from "../types/planner";
 
 interface PageHeaderProps {
@@ -11,6 +11,7 @@ interface PageHeaderProps {
   urgencyScore: number;
   onResetPreset: () => void;
   onExportIcs: () => void;
+  onOpenCustomEvent: () => void;
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
@@ -21,7 +22,8 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   triageTier,
   urgencyScore,
   onResetPreset,
-  onExportIcs
+  onExportIcs,
+  onOpenCustomEvent
 }) => {
   const tierBadges: Record<
     PlanningTriageTier,
@@ -68,6 +70,17 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />
           <span>Deterministic Engine Active</span>
         </span>
+
+        <button
+          type="button"
+          id="open-custom-event-modal"
+          onClick={onOpenCustomEvent}
+          aria-label="Plan a custom event"
+          className="utsav-btn utsav-btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 font-semibold text-amber-800 bg-amber-50 border-amber-200 hover:bg-amber-100"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />
+          <span>+ Plan Custom Event</span>
+        </button>
 
         <button
           type="button"

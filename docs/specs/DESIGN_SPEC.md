@@ -74,7 +74,7 @@ Modern generative AI interfaces frequently suffer from low-contrast translucent 
 | `UX-8` | **8-Col Vendor Quote Auditor**: System shall provide a plain-text note auditor detecting omitted 18% GST, generator fuel surcharges, and cleaning deposits, generating 3 negotiation prompts with 1-click direct WhatsApp (`wa.me`) dispatch links. | `src/components/MainPanel.tsx` | Vendor WhatsApp Link Audit | **PASS** |
 | `UX-9` | **4-Col What-If Simulator Sliders**: Card 1 in sidebar shall feature 3 accessible range sliders: Guest Count (20-500), Total Budget Cap (₹50k-₹25L), and Days to Event (7-365) with explicit `aria-label`, `aria-valuemin`, `aria-valuemax`, and `aria-valuenow`. | `src/components/SidebarStack.tsx` | Accessibility & Keyboard Audit | **PASS** |
 | `UX-10` | **4-Col Radar & Vendor Shortlist**: Cards 2 and 3 in sidebar shall render the continuous 0-100 Urgency Score radar progress meter, triage tier badge, category percentage breakdowns, and verified vendor WhatsApp links. | `src/components/SidebarStack.tsx` | Radar & Vendor Shortlist Test | **PASS** |
-| `UX-11` | **Solid-Surface Material 3 Standards**: System shall strictly prohibit `backdrop-filter` and `blur()`, achieve $\ge 4.5:1$ text contrast, provide visible 2px focus rings (`--c-primary`), tabular numbers (`font-variant-numeric: tabular-nums`), and zero `dangerouslySetInnerHTML`. | `tokens.css`, `compliance.test.ts` | Static AST Compliance Scans | **PASS** |
+| `UX-11` | **Solid-Surface Material 3 Standards**: System shall strictly prohibit `backdrop-filter` and `blur()`, achieve $\ge 4.5:1$ text contrast, provide visible 2px focus rings (`--c-primary`), tabular numbers (`font-variant-numeric: tabular-nums`), and zero raw HTML markup injection. | `tokens.css`, `compliance.test.ts` | Static AST Compliance Scans | **PASS** |
 
 ---
 
@@ -106,7 +106,7 @@ Modern generative AI interfaces frequently suffer from low-contrast translucent 
 | **Judge Scenario Presets** | 1-Click loading of Presets A, B, and C integrated in App Bar and Page Header | **PASS** |
 | **Alert Banner Rules** | Role `alert` triggers when Urgency $\ge 65$ with exact ₹ deficit or blocked task count | **PASS** |
 | **Accessible Sliders** | Guest (20-500), Budget (₹50k-₹25L), Days (7-365) with all required ARIA attributes | **PASS** |
-| **Solid-Surface Rules** | 0 blurs, 0 `backdrop-filter`, 0 `dangerouslySetInnerHTML`, WCAG AA contrast $\ge 4.5:1$ | **PASS** |
+| **Solid-Surface Rules** | 0 blurs, 0 `backdrop-filter`, 0 raw HTML injections, WCAG AA contrast $\ge 4.5:1$ | **PASS** |
 | **Traceability Matrix** | All 11 requirements (`UX-1` through `UX-11`) defined, single-statement, verifiable | **PASS** |
 
 **Stage 2 Verdict: PASS**

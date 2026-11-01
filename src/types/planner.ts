@@ -48,6 +48,16 @@ export interface MilestoneTask {
   status: "pending" | "in_progress" | "completed";
   urgency: "low" | "medium" | "critical";
   leadTimeDays?: number;
+  delayMinutes?: number;
+  delayStatus?: "on_time" | "delayed" | "blocked";
+  timeSlot?: string;
+  tMinusStage?: "t_30" | "t_7" | "t_24h" | "day_of";
+  vendorContact?: {
+    name: string;
+    phone: string;
+    role: string;
+    email?: string;
+  };
 }
 
 export interface EventPlanInput {

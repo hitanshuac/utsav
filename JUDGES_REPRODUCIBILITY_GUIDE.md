@@ -1,14 +1,14 @@
 # Hackathon Judges: Quick Environment Recreation & Evaluation Guide
 
-This guide ensures judges and evaluators can reproduce, run, and verify the entire **Utsav Celebration & Wedding Coordination Command Center** environment locally in under 60 seconds.
+This guide ensures judges and evaluators can reproduce, run, and verify the entire **UtsavAI (उत्सव AI) — Celebration & Event Execution Engine** environment locally in under 60 seconds.
 
 ---
 
 ## 1. Prerequisites
-- **Node.js**: v18.x or v20.x+ (Recommended: Node 20 LTS)
+- **Node.js**: v20.x+ LTS (Node 20 or higher)
 - **Package Manager**: `npm` (v9+)
 - **Git**
-- *(Optional for Live AI Inference)*: A free Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey). The application also includes an OWASP-compliant **Deterministic Shield Fallback** that guarantees 100% functionality even without an API key.
+- *(Optional for Live AI Inference)*: A free Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey). The application also includes an OWASP-compliant **Deterministic Shield Fallback** that guarantees 100% functionality offline without an API key.
 
 ---
 
@@ -40,9 +40,9 @@ The application will be live at: **`http://localhost:3000`**
 
 | Variable | Required? | Default | Purpose |
 |---|---|---|---|
-| `GEMINI_API_KEY` | Optional | `""` | Gemini API key for live LLM quote auditing, trade-offs, and task parsing. |
+| `GEMINI_API_KEY` | Optional | `""` | Gemini API key for live LLM quote auditing and trade-offs. |
 | `GOOGLE_API_KEY` | Optional | `""` | Alternative alias for `GEMINI_API_KEY` (auto-detected). |
-| `GEMINI_MODEL` | Optional | `gemini-3.8-flash` | Gemini model name. If unavailable on your key, auto-falls back to `gemini-2.5-flash`. |
+| `GEMINI_MODEL` | Optional | `gemini-2.5-flash` | Gemini model name. If unavailable on your key, auto-falls back to `gemini-2.0-flash`. |
 | `APP_URL` | Optional | `http://localhost:3000` | Host base URL. |
 | `PORT` | Optional | `3000` | Local HTTP port. |
 
@@ -62,13 +62,13 @@ Sample JSON response:
 {
   "status": "ok",
   "nodeVersion": "v20.x.x",
-  "timestamp": "2026-10-28T...",
+  "timestamp": "2026-10-30T...",
   "llm": {
     "configured": true,
-    "model": "gemini-3.8-flash",
+    "model": "gemini-2.5-flash",
     "provider": "Google Gemini (@google/genai)",
     "source": "gemini-live",
-    "message": "Live Gemini inference active (Primary: gemini-3.8-flash)"
+    "message": "Live Gemini inference active (Primary: gemini-2.5-flash)"
   },
   "env": {
     "geminiKeyConfigured": true,
@@ -79,40 +79,77 @@ Sample JSON response:
 
 ---
 
-## 5. Automated Test Suite (25 Tests)
+## 5. Automated Test Suites (54 Vitest Tests + 14 Resilience Tests + 6 Compliance Scans)
 
 To verify the deterministic math engine, topological dependency graph, RFC 5545 calendar generator, cascade delay engine, event logger, and communication services:
 
 ```bash
-npm run test
+# Complete unit & regression test suite (54 tests)
+npm test
+
+# Automated Planner Resilience & Deterministic Test Harness (RES-1 to RES-14)
+npm run test:planner
+
+# Automated Security, Privacy (Zero-PII) & Schema Compliance Scans (6 scans)
+npm run test:compliance
+
+# TypeScript typecheck
+npm run lint
+
+# Production Vite build
+npm run build
 ```
 
-Expected output:
+Expected output for `npm test`:
 ```text
-✓ tests/budget-math.test.ts (3 tests)
-✓ tests/guest-buffer.test.ts (3 tests)
-✓ tests/delay-cascade.test.ts (3 tests)
-✓ tests/dependency-graph.test.ts (5 tests)
-✓ tests/communication.test.ts (4 tests)
-✓ tests/tminus-alert-service.test.ts (3 tests)
-✓ tests/event-logger.test.ts (4 tests)
+ ✓ tests/budget-math.test.ts (3 tests)
+ ✓ tests/guest-buffer.test.ts (3 tests)
+ ✓ tests/delay-cascade.test.ts (3 tests)
+ ✓ tests/dependency-graph.test.ts (5 tests)
+ ✓ tests/communication.test.ts (4 tests)
+ ✓ tests/tminus-alert-service.test.ts (3 tests)
+ ✓ tests/event-logger.test.ts (4 tests)
+ ✓ tests/fullstack-architecture.test.ts (5 tests)
+ ✓ tests/planner-resilience.test.ts (14 tests)
+ ✓ tests/compliance.test.ts (6 tests)
+ ✓ tests/custom-event-intake.test.ts (4 tests)
 
-Test Files  7 passed (7)
-Tests       25 passed (25)
+Test Files  11 passed (11)
+Tests       54 passed (54)
 ```
 
 ---
 
-## 6. How to Test the AI LLM Features
+## 6. Evaluator Shield: 1-Click Scenario Presets
 
-1. **Vendor Quote Auditor**:
+Testable in `<= 3` clicks with `<10ms` instant load and zero login:
+
+1. **Preset A: Sharma Family Wedding**
+   - 350 guests, ₹18,00,000 budget cap, 8 milestones
+   - Triage Tier: `CRITICAL_OVERRUN` (Tier 1) with per-guest catering variance
+2. **Preset B: 50th Milestone Anniversary**
+   - 120 guests, ₹6,50,000 budget cap, 6 milestones
+   - Triage Tier: `TIMELINE_BOTTLENECK` (Tier 2) with prerequisite dependency hold
+3. **Preset C: Neighborhood Cultural Utsav**
+   - 600 guests, ₹12,00,000 budget cap, 8 milestones
+   - Triage Tier: `VENDOR_CLARIFICATION` (Tier 3) with unconfirmed vendor quotes
+4. **Custom Event Guided Intake (`+ Plan Custom Event`)**
+   - Click `+ Plan Custom Event` in Region 3 header to dynamically generate custom budget allocations (+10% Must-Have boost) and 6-step DAG in `<5ms`.
+
+---
+
+## 7. How to Test the AI LLM Features
+
+1. **Vendor Quote Auditor (`/api/audit-vendor`)**:
    - Navigate to the **Vendor Auditor** tab.
-   - Enter a rough quotation note (e.g., `Sharma Caterers: ₹650 per plate, 18% GST extra, cleaning fee Rs 5,000`).
+   - Enter a rough quotation note (e.g., `Royal Caterers: ₹650 per plate, 18% GST extra, cleaning fee Rs 5,000`).
    - Click **Audit Vendor Quote**.
    - Notice the badge: `Gemini Live` (when API key is provided) or `Deterministic Shield` (when testing offline).
    - Hidden cost clauses (unbundled 18% GST, cleaning surcharge) and negotiation questions are extracted.
-2. **Strategic Budget Trade-Offs**:
-   - Navigate to the **Trade-Offs** tab.
-   - Click **Generate Strategic Trade-Offs** to evaluate algorithmic reallocation and AI reasoning.
-3. **Task Natural Language Parser**:
-   - In the **Pending Tasks Strip** or **Milestones**, type rough natural language notes (e.g., `Urgent Mandap floral setup 3 days before event`) to see instant structured extraction into category and deadline.
+   - 1-click WhatsApp button generates pre-formatted `https://wa.me/` negotiation link.
+2. **Strategic Budget Trade-Offs (`/api/rebalance`)**:
+   - Navigate to the **Budget** tab.
+   - Click **Resolve Trade-Offs** to evaluate algorithmic reallocation and AI reasoning.
+   - 1-click **Apply Trade-off** instantly updates budget allocations deterministically.
+3. **RFC 5545 Calendar Export**:
+   - In the header, click **📅 Export .ics Calendar** to download the complete event milestone timeline.
