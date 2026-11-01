@@ -412,11 +412,32 @@ export function generateDeterministicTradeoffs(
 export function auditVendorQuoteOffline(vendorNote: string): VendorAuditResult {
   const lower = vendorNote.toLowerCase();
 
-  // Extract rough quoted amount via regex
-  const amountMatch = vendorNote.match(/(?:rs\.?|inr|₹)\s*([\d,]+)/i) || vendorNote.match(/([\d,]+)\s*(?:rs|inr|\/-)/i);
+  // Extract vendor name if present at start (e.g., "Royal Caterers: ₹650 per plate...")
+  let vendorName = "Audited Vendor Quotation";
+  const nameMatch = vendorNote.match(/^([A-Za-z0-9\s&'.-]{3,35})\s*[:\-\n]/);
+  if (nameMatch && !nameMatch[1].toLowerCase().includes("quote") && !nameMatch[1].toLowerCase().includes("invoice")) {
+    vendorName = nameMatch[1].trim();
+  }
+
+  // Check for per-plate multiplier (e.g., ₹650 per plate, minimum 180 pax)
+  const perPlateMatch = vendorNote.match(/(?:rs\.?|inr|₹)\s*([\d,]+)\s*(?:per\s*plate|\/plate|per\s*pax|per\s*head|\/head)/i);
+  const paxMatch = vendorNote.match(/(\d+)\s*(?:pax|guests|people|plates|attendees)/i) || vendorNote.match(/(?:min|minimum)\s*(\d+)/i);
+
   let quotedAmount = 0;
-  if (amountMatch) {
-    quotedAmount = parseInt(amountMatch[1].replace(/,/g, ""), 10) || 0;
+  if (perPlateMatch && paxMatch) {
+    const rate = parseInt(perPlateMatch[1].replace(/,/g, ""), 10) || 0;
+    const pax = parseInt(paxMatch[1], 10) || 0;
+    if (rate > 0 && pax > 0) {
+      quotedAmount = rate * pax;
+    }
+  }
+
+  // Fallback to standard base amount match
+  if (quotedAmount === 0) {
+    const amountMatch = vendorNote.match(/(?:rs\.?|inr|₹)\s*([\d,]+)/i) || vendorNote.match(/([\d,]+)\s*(?:rs|inr|\/-)/i);
+    if (amountMatch) {
+      quotedAmount = parseInt(amountMatch[1].replace(/,/g, ""), 10) || 0;
+    }
   }
 
   const detectedInclusions: string[] = [];
@@ -495,7 +516,7 @@ export function auditVendorQuoteOffline(vendorNote: string): VendorAuditResult {
   const finalQuestions = negotiationQuestions.slice(0, 3);
 
   return {
-    vendorName: "Audited Vendor Quotation",
+    vendorName,
     quotedAmount,
     detectedInclusions,
     inclusions: detectedInclusions,

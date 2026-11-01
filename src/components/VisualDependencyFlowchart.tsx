@@ -1143,10 +1143,11 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                       <button
                         type="button"
                         onClick={() => handleStatusChange("completed")}
-                        className="mt-2.5 w-full utsav-btn bg-indigo-600 hover:bg-indigo-700 text-white text-xs py-1.5 font-bold shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                        className="mt-3 w-full utsav-btn bg-indigo-600 hover:bg-indigo-700 text-white text-xs py-2 px-3 font-bold shadow-xs cursor-pointer flex items-center justify-center gap-2 whitespace-normal break-words text-center leading-snug"
+                        title={`Complete '${selectedTask.title}' to unlock ${getDownstreamTasks(selectedTask.id).length} dependent milestone(s)`}
                       >
-                        <CheckCircle className="w-3.5 h-3.5" />
-                        <span>Complete '{selectedTask.title}' to Unlock Dependent Path</span>
+                        <CheckCircle className="w-4 h-4 shrink-0 text-white" />
+                        <span>Complete Milestone &amp; Unlock {getDownstreamTasks(selectedTask.id).length} Dependent Task(s)</span>
                       </button>
                     )}
                   </div>

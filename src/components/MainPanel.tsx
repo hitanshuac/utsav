@@ -262,6 +262,158 @@ export const MainPanel: FC<MainPanelProps> = ({
     }
   };
 
+  // Category mapping templates for 1-click bridge from Step 2 (Budget) to Step 3 (Auditor)
+  const CATEGORY_SAMPLE_NOTES: Record<string, string> = {
+    catering: "Royal Caterers: ₹650 per plate, minimum 180 pax. Waitstaff included. Cleaning fee ₹5,000 extra. GST extra at 18%.",
+    decor: "Shree Mandap Decor: ₹1,50,000 for main hall and entrance. Flowers fresh marigold and jasmine. Generator fuel ₹15,000 extra. GST extra.",
+    photography: "Studio Memories: ₹90,000 for 2-day candid photo + cinematic teaser. Drone coverage ₹15,000 extra. Advance 50% non-refundable.",
+    venue: "Grand Palace Banquet: ₹2,50,000 for 12 hours. Electricity billed at ₹18/unit. Cleaning deposit ₹10,000 refundable. Midnight curfew strictly enforced.",
+    logistics: "City Express Shuttles: ₹45,000 for 3 tempo travellers 24 hrs. Diesel fuel at actuals. Toll taxes and parking separate.",
+    miscellaneous: "Event Supplies & Sound: ₹35,000 for wireless mics and DJ system. Generator fuel charges not included."
+  };
+
+  const [selectedTargetItemId, setSelectedTargetItemId] = useState<string>("");
+  const [syncFeedback, setSyncFeedback] = useState<{
+    vendorName: string;
+    amount: number;
+    categoryLabel: string;
+    milestoneTitle?: string;
+  } | null>(null);
+
+  // Auto-detect which budget item corresponds to the current audited quotation
+  const autoDetectedItem = useMemo(() => {
+    const noteOrName = `${vendorNote} ${vendorAudit.vendorName}`.toLowerCase();
+    if (
+      noteOrName.includes("cater") ||
+      noteOrName.includes("food") ||
+      noteOrName.includes("plate") ||
+      noteOrName.includes("menu") ||
+      noteOrName.includes("buffet") ||
+      noteOrName.includes("chaat")
+    ) {
+      return budgetItems.find((b) => b.category === "catering") || budgetItems[0];
+    }
+    if (
+      noteOrName.includes("decor") ||
+      noteOrName.includes("mandap") ||
+      noteOrName.includes("flower") ||
+      noteOrName.includes("stage")
+    ) {
+      return budgetItems.find((b) => b.category === "decor") || budgetItems[0];
+    }
+    if (
+      noteOrName.includes("photo") ||
+      noteOrName.includes("video") ||
+      noteOrName.includes("drone") ||
+      noteOrName.includes("album")
+    ) {
+      return budgetItems.find((b) => b.category === "photography") || budgetItems[0];
+    }
+    if (
+      noteOrName.includes("venue") ||
+      noteOrName.includes("hall") ||
+      noteOrName.includes("banquet") ||
+      noteOrName.includes("lawn")
+    ) {
+      return budgetItems.find((b) => b.category === "venue") || budgetItems[0];
+    }
+    if (
+      noteOrName.includes("sound") ||
+      noteOrName.includes("dg") ||
+      noteOrName.includes("generator") ||
+      noteOrName.includes("fleet") ||
+      noteOrName.includes("shuttle") ||
+      noteOrName.includes("transport")
+    ) {
+      return budgetItems.find((b) => b.category === "logistics") || budgetItems[0];
+    }
+    return budgetItems.find((b) => b.isEstimate) || budgetItems[0];
+  }, [vendorNote, vendorAudit, budgetItems]);
+
+  const activeTargetItem = useMemo(() => {
+    return budgetItems.find((b) => b.id === selectedTargetItemId) || autoDetectedItem;
+  }, [budgetItems, selectedTargetItemId, autoDetectedItem]);
+
+  const matchedMilestone = useMemo(() => {
+    if (!activeTargetItem) return null;
+    return milestones.find((m) => m.category === activeTargetItem.category);
+  }, [activeTargetItem, milestones]);
+
+  const handleStartVendorAuditForCategory = (category: string) => {
+    const note = CATEGORY_SAMPLE_NOTES[category] || sampleVendorNote;
+    setVendorNote(note);
+    const offlineRes = auditVendorQuoteOffline(note);
+    setVendorAudit(offlineRes);
+    setAuditProvenance("fallback");
+    setSyncFeedback(null);
+    if (onTabChange) {
+      onTabChange("vendor");
+    }
+  };
+
+  const handleSyncVendorQuoteToBudget = () => {
+    if (!activeTargetItem || vendorAudit.quotedAmount <= 0) return;
+
+    const oldAmount = activeTargetItem.allocatedAmount;
+    const newAmount = vendorAudit.quotedAmount;
+
+    // 1. Update budget item
+    if (onUpdateBudgetItem) {
+      onUpdateBudgetItem(activeTargetItem.id, newAmount);
+    }
+
+    // 2. Advance matching milestone if in pending state
+    if (matchedMilestone && matchedMilestone.status === "pending" && onUpdateTaskStatus) {
+      onUpdateTaskStatus(matchedMilestone.id, "in_progress");
+    }
+
+    // 3. Log closed-loop event
+    logActivityEvent({
+      taskId: `sync-${activeTargetItem.id}`,
+      taskTitle: `Synced Vendor Quote: ${vendorAudit.vendorName}`,
+      category: activeTargetItem.category,
+      channel: "system",
+      vendorName: vendorAudit.vendorName,
+      recipient: "Budget & Contract Ledger",
+      summary: `Synced verified quote of ₹${newAmount.toLocaleString("en-IN")} from ${vendorAudit.vendorName} to ${activeTargetItem.label} (Previous: ₹${oldAmount.toLocaleString("en-IN")}). Removed estimate flag & updated contract baseline.`,
+      loopStatus: "closed"
+    });
+
+    // 4. Action diff notification
+    if (onActionTriggered) {
+      onActionTriggered(
+        `Integrated Quote: ${vendorAudit.vendorName}`,
+        `Applied verified vendor quotation of ₹${newAmount.toLocaleString("en-IN")} into ${activeTargetItem.label}. Closed unverified estimate gap.`,
+        [
+          {
+            label: `${activeTargetItem.label} Allocation`,
+            before: `₹${oldAmount.toLocaleString("en-IN")} (Estimate)`,
+            after: `₹${newAmount.toLocaleString("en-IN")} (Verified)`,
+            diff:
+              newAmount <= oldAmount
+                ? `-₹${(oldAmount - newAmount).toLocaleString("en-IN")}`
+                : `+₹${(newAmount - oldAmount).toLocaleString("en-IN")}`,
+            isImprovement: newAmount <= oldAmount
+          },
+          {
+            label: "Contract Status",
+            before: "Unverified Estimate",
+            after: "Audited & Verified",
+            diff: "Verified Quote",
+            isImprovement: true
+          }
+        ]
+      );
+    }
+
+    setSyncFeedback({
+      vendorName: vendorAudit.vendorName,
+      amount: newAmount,
+      categoryLabel: activeTargetItem.label,
+      milestoneTitle: matchedMilestone?.title
+    });
+  };
+
   const query = (filterQuery || "").trim().toLowerCase();
 
   // Filter items in real time across budget and milestones
@@ -792,22 +944,34 @@ export const MainPanel: FC<MainPanelProps> = ({
                       </span>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => onToggleVerified(item.id)}
-                      title="Click to toggle Verified Quote vs Estimated Assumption"
-                      className="cursor-pointer"
-                    >
-                      {item.isEstimate ? (
-                        <span className="utsav-badge utsav-badge-timeline hover:opacity-85 text-[10px]">
-                          {t.unverifiedEstimate}
-                        </span>
-                      ) : (
-                        <span className="utsav-badge utsav-badge-ontrack hover:opacity-85 text-[10px]">
-                          {t.verifiedQuote}
-                        </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {item.isEstimate && (
+                        <button
+                          type="button"
+                          onClick={() => handleStartVendorAuditForCategory(item.category)}
+                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 cursor-pointer flex items-center gap-1 transition-colors"
+                          title={`Audit quotation for ${item.label} in Step 3`}
+                        >
+                          <span>📜 Audit Quote →</span>
+                        </button>
                       )}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => onToggleVerified(item.id)}
+                        title="Click to toggle Verified Quote vs Estimated Assumption"
+                        className="cursor-pointer"
+                      >
+                        {item.isEstimate ? (
+                          <span className="utsav-badge utsav-badge-timeline hover:opacity-85 text-[10px]">
+                            {t.unverifiedEstimate}
+                          </span>
+                        ) : (
+                          <span className="utsav-badge utsav-badge-ontrack hover:opacity-85 text-[10px]">
+                            {t.verifiedQuote}
+                          </span>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   {item.notes && (
@@ -1211,6 +1375,110 @@ export const MainPanel: FC<MainPanelProps> = ({
               >
                 {auditProvenance === "ai" ? "✨ Gemini 3.5 Live AI Audit" : "🛡️ Deterministic Guard Active"}
               </span>
+            </div>
+
+            {/* INTEGRATION & CLOSED-LOOP BUDGET SYNC CARD */}
+            <div className="bg-white border-2 border-indigo-200 rounded-xl p-3.5 mb-4 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-100 pb-3 mb-3">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                    ⚡
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                      <span>Integrate Quote with Event Budget &amp; Milestones</span>
+                      <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.2 rounded font-mono font-semibold">
+                        Closed Loop
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Directly apply this audited ₹{vendorAudit.quotedAmount.toLocaleString("en-IN")} quote into your budget allocation ledger and advance dependent milestones.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <label htmlFor="target-budget-item-select" className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                    Target Category:
+                  </label>
+                  <select
+                    id="target-budget-item-select"
+                    value={activeTargetItem?.id || ""}
+                    onChange={(e) => setSelectedTargetItemId(e.target.value)}
+                    className="utsav-select text-xs font-semibold py-1 px-2 border-slate-300 rounded bg-slate-50"
+                    aria-label="Select target budget category to apply quote"
+                  >
+                    {budgetItems.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.label} (Current: ₹{b.allocatedAmount.toLocaleString("en-IN")})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {syncFeedback ? (
+                <div className="bg-emerald-50 border border-emerald-300 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="text-xs font-semibold text-emerald-950">
+                      Applied <strong>₹{syncFeedback.amount.toLocaleString("en-IN")}</strong> to <strong>{syncFeedback.categoryLabel}</strong> (Verified Quote Locked).
+                      {syncFeedback.milestoneTitle && (
+                        <span className="text-emerald-800 font-normal"> Linked milestone <em>&quot;{syncFeedback.milestoneTitle}&quot;</em> progressed.</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {onTabChange && (
+                      <button
+                        type="button"
+                        onClick={() => onTabChange("budget")}
+                        className="utsav-btn bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] px-2.5 py-1 font-bold shadow-xs cursor-pointer flex items-center gap-1"
+                      >
+                        <span>View in Step 2: Budget</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="text-xs text-slate-600 flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <span>
+                      Target Line: <strong className="text-slate-900">{activeTargetItem?.label}</strong>
+                    </span>
+                    <span>
+                      Current: <span className="font-mono font-bold text-slate-800">₹{activeTargetItem?.allocatedAmount.toLocaleString("en-IN")}</span>
+                      {activeTargetItem?.isEstimate && <span className="text-amber-700 font-bold ml-1">(Unverified)</span>}
+                    </span>
+                    <span>
+                      Audited Quote: <span className="font-mono font-bold text-indigo-700">₹{vendorAudit.quotedAmount.toLocaleString("en-IN")}</span>
+                    </span>
+                    {activeTargetItem && (
+                      <span className="font-mono text-[11px] font-bold">
+                        {vendorAudit.quotedAmount <= activeTargetItem.allocatedAmount ? (
+                          <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                            Saves ₹{(activeTargetItem.allocatedAmount - vendorAudit.quotedAmount).toLocaleString("en-IN")}
+                          </span>
+                        ) : (
+                          <span className="text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                            Deficit +₹{(vendorAudit.quotedAmount - activeTargetItem.allocatedAmount).toLocaleString("en-IN")}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSyncVendorQuoteToBudget}
+                    className="utsav-btn bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3.5 py-1.5 font-bold shadow-xs cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                  >
+                    <span>⚡ Apply to Budget &amp; Lock Verified</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Flagged Hidden Costs with High-Contrast Solid Indicator */}

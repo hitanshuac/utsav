@@ -763,10 +763,26 @@ function generateDeterministicTradeoffs(deficit, scaledCategories, _vibe) {
 }
 function auditVendorQuoteOffline(vendorNote) {
   const lower = vendorNote.toLowerCase();
-  const amountMatch = vendorNote.match(/(?:rs\.?|inr|₹)\s*([\d,]+)/i) || vendorNote.match(/([\d,]+)\s*(?:rs|inr|\/-)/i);
+  let vendorName = "Audited Vendor Quotation";
+  const nameMatch = vendorNote.match(/^([A-Za-z0-9\s&'.-]{3,35})\s*[:\-\n]/);
+  if (nameMatch && !nameMatch[1].toLowerCase().includes("quote") && !nameMatch[1].toLowerCase().includes("invoice")) {
+    vendorName = nameMatch[1].trim();
+  }
+  const perPlateMatch = vendorNote.match(/(?:rs\.?|inr|₹)\s*([\d,]+)\s*(?:per\s*plate|\/plate|per\s*pax|per\s*head|\/head)/i);
+  const paxMatch = vendorNote.match(/(\d+)\s*(?:pax|guests|people|plates|attendees)/i) || vendorNote.match(/(?:min|minimum)\s*(\d+)/i);
   let quotedAmount = 0;
-  if (amountMatch) {
-    quotedAmount = parseInt(amountMatch[1].replace(/,/g, ""), 10) || 0;
+  if (perPlateMatch && paxMatch) {
+    const rate = parseInt(perPlateMatch[1].replace(/,/g, ""), 10) || 0;
+    const pax = parseInt(paxMatch[1], 10) || 0;
+    if (rate > 0 && pax > 0) {
+      quotedAmount = rate * pax;
+    }
+  }
+  if (quotedAmount === 0) {
+    const amountMatch = vendorNote.match(/(?:rs\.?|inr|₹)\s*([\d,]+)/i) || vendorNote.match(/([\d,]+)\s*(?:rs|inr|\/-)/i);
+    if (amountMatch) {
+      quotedAmount = parseInt(amountMatch[1].replace(/,/g, ""), 10) || 0;
+    }
   }
   const detectedInclusions = [];
   const flaggedHiddenCosts = [];
@@ -821,7 +837,7 @@ function auditVendorQuoteOffline(vendorNote) {
   }
   const finalQuestions = negotiationQuestions.slice(0, 3);
   return {
-    vendorName: "Audited Vendor Quotation",
+    vendorName,
     quotedAmount,
     detectedInclusions,
     inclusions: detectedInclusions,
