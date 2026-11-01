@@ -9,8 +9,8 @@ All LLM calls are strictly isolated on the server side (`server.ts` -> `/api/reb
    - Reads `process.env.GEMINI_API_KEY` or `process.env.GOOGLE_API_KEY`.
    - Rejects known template placeholders (`YOUR_GEMINI_API_KEY_HERE`, `YOUR_GEMINI_API_KEY`, `MY_GEMINI_API_KEY`) so placeholder strings never trigger malformed API calls.
 2. **Model Selection & Automatic Failover**:
-   - Primary model: `process.env.GEMINI_MODEL` (defaults to `gemini-2.5-flash`).
-   - Automatic failover: If an external developer/judge API key tier returns `404` or `NOT_FOUND` for `gemini-2.5-flash`, `SecureLLMClient` automatically retries with `gemini-2.0-flash`.
+   - Primary model: `process.env.GEMINI_MODEL` (defaults to `gemini-3.5-flash`).
+   - Automatic failover: If an external developer/judge API key tier returns `404`, `503` (high demand), or `NOT_FOUND` for `gemini-3.5-flash`, `SecureLLMClient` automatically retries with `gemini-3.5-flash-lite`.
 3. **OWASP LLM01 (Prompt Injection Prevention)**:
    - `sanitizeInput()` caps input length at 800 characters, strips HTML tags (`/<[^>]*>?/gm`), and neutralizes raw structural delimiters (`{}[]`).
 4. **OWASP LLM06 (Sensitive Information Disclosure)**:
@@ -32,10 +32,10 @@ Returns live runtime and LLM configuration diagnostics:
   "timestamp": "2026-10-30T...",
   "llm": {
     "configured": true,
-    "model": "gemini-2.5-flash",
+    "model": "gemini-3.5-flash",
     "provider": "Google Gemini (@google/genai)",
     "source": "gemini-live",
-    "message": "Live Gemini inference active (Primary: gemini-2.5-flash)"
+    "message": "Live Gemini 3.5 inference active (Primary: gemini-3.5-flash)"
   }
 }
 ```

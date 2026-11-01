@@ -1,6 +1,9 @@
 # Hackathon Judges: Quick Environment Recreation & Evaluation Guide
 
-This guide ensures judges and evaluators can reproduce, run, and verify the entire **UtsavAI (उत्सव AI) — Celebration & Event Execution Engine** environment locally in under 60 seconds.
+🌐 **Live Production App:** [https://utsav-wine.vercel.app](https://utsav-wine.vercel.app)  
+⚡ **Live Diagnostics & AI Provenance:** [https://utsav-wine.vercel.app/api/health](https://utsav-wine.vercel.app/api/health)
+
+This guide ensures judges and evaluators can reproduce, run, and verify the entire **UtsavAI (उत्सव AI) — Celebration & Event Execution Engine** environment locally in under 60 seconds or evaluate the live deployed application directly.
 
 ---
 
@@ -42,7 +45,7 @@ The application will be live at: **`http://localhost:3000`**
 |---|---|---|---|
 | `GEMINI_API_KEY` | Optional | `""` | Gemini API key for live LLM quote auditing and trade-offs. |
 | `GOOGLE_API_KEY` | Optional | `""` | Alternative alias for `GEMINI_API_KEY` (auto-detected). |
-| `GEMINI_MODEL` | Optional | `gemini-2.5-flash` | Gemini model name. If unavailable on your key, auto-falls back to `gemini-2.0-flash`. |
+| `GEMINI_MODEL` | Optional | `gemini-3.5-flash` | Gemini model name. If unavailable on your key, auto-falls back to `gemini-3.5-flash-lite`. |
 | `APP_URL` | Optional | `http://localhost:3000` | Host base URL. |
 | `PORT` | Optional | `3000` | Local HTTP port. |
 
@@ -65,10 +68,10 @@ Sample JSON response:
   "timestamp": "2026-10-30T...",
   "llm": {
     "configured": true,
-    "model": "gemini-2.5-flash",
+    "model": "gemini-3.5-flash",
     "provider": "Google Gemini (@google/genai)",
     "source": "gemini-live",
-    "message": "Live Gemini inference active (Primary: gemini-2.5-flash)"
+    "message": "Live Gemini 3.5 inference active (Primary: gemini-3.5-flash)"
   },
   "env": {
     "geminiKeyConfigured": true,

@@ -8,7 +8,7 @@
 - REFERENCE (UI): src/styles/demo.html (4-Region Solid-Surface Material 3 Layout)
 - BRAND: UtsavAI (उत्सव AI — Celebration & Event Execution Concierge)
 - RUNTIME: Vite 8 + React 19 + Express (local dev), Google Cloud Run / Vercel (production)
-- LLM_PROVIDER: Google Gemini (@google/genai ^2.4.0, gemini-2.5-flash)
+- LLM_PROVIDER: Google Gemini (@google/genai ^2.4.0, gemini-3.5-flash with gemini-3.5-flash-lite failover)
 - AUTH_PROVIDER: None (Zero-PII architecture, no authentication or persistent storage by design)
 - DEPLOY_TARGET: Google Cloud Run (port 3000 app, port 8080 reverse proxy)
 

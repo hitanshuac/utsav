@@ -1,5 +1,8 @@
 # Architecture & Data Flow (`UtsavAI`)
 
+🌐 **Live Production App:** [https://utsav-wine.vercel.app](https://utsav-wine.vercel.app)  
+⚡ **Live Diagnostics & AI Provenance:** [https://utsav-wine.vercel.app/api/health](https://utsav-wine.vercel.app/api/health)
+
 ## 1. High-Level System Design
 
 `UtsavAI` is a hybrid deterministic + AI-assisted celebration and event execution engine designed for high-stakes Indian weddings and community events.
@@ -19,7 +22,7 @@
               │
               └──► SecureLLMClient (src/lib/services/secure-llm-client.ts)
                      ├── 1. Pre-flight OWASP LLM01 Input Sanitization (strip HTML, max 800 chars)
-                     ├── 2. Google Gemini (@google/genai: gemini-2.5-flash -> fallback gemini-2.0-flash)
+                     ├── 2. Google Gemini (@google/genai: gemini-3.5-flash -> fallback gemini-3.5-flash-lite)
                      ├── 3. Post-flight OWASP LLM06 Credential Leak Inspection (blocks AIza... / sk-...)
                      ├── 4. Strict Zod Schema Runtime Validation (src/types/schemas.ts)
                      └── 5. Automatic Deterministic Shield Fallback on missing key or API failure

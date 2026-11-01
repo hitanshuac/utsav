@@ -1,5 +1,8 @@
 # UtsavAI — Celebration & Event Execution Engine
 
+🌐 **Live Production App:** [https://utsav-wine.vercel.app](https://utsav-wine.vercel.app)  
+⚡ **Live Diagnostics & AI Provenance:** [https://utsav-wine.vercel.app/api/health](https://utsav-wine.vercel.app/api/health)
+
 > **Hack2Skill · Prompt Wars Virtual · Challenge 5: Celebration & Event Planner**  
 > *Deterministic Budget & Dependency Execution Engine with Strategic GenAI Trade-Off Resolution & Vendor Quote Auditing*
 
@@ -20,7 +23,7 @@ Real-world Indian celebration planning fails not from lack of creative inspirati
 
 ### Core Architectural Principles
 1. **Deterministic Single Source of Truth (`src/lib/plannerEngine.ts`):** All financial arithmetic, variable headcount scaling, DAG topological milestone sorting, and urgency scoring are mathematically deterministic and run synchronously in `<5ms`.
-2. **Generative AI strictly for Qualitative Intelligence (`/api/rebalance`, `/api/audit-vendor`):** Google Gemini (`gemini-2.5-flash`, with `gemini-2.0-flash` failover) is strictly restricted to qualitative trade-off phrasing, plain-text vendor contract audits, and negotiation drafts. The LLM can never alter mathematical totals or bypass milestone dependency constraints.
+2. **Generative AI strictly for Qualitative Intelligence (`/api/rebalance`, `/api/audit-vendor`):** Google Gemini (`gemini-3.5-flash`, with `gemini-3.5-flash-lite` failover) is strictly restricted to qualitative trade-off phrasing, plain-text vendor contract audits, and negotiation drafts. The LLM can never alter mathematical totals or bypass milestone dependency constraints.
 3. **True Zero-PII Ephemeral State:** Zero accounts, zero cookies, zero browser web storage, and zero database persistence.
 4. **Offline Resilience & Evaluator Shield:** 100% of planning, trade-off proposals, vendor quote auditing, RFC 5545 `.ics` export, and WhatsApp (`wa.me`) deep links execute offline in `<10ms` without API keys.
 
@@ -91,7 +94,7 @@ cp .env.example .env
 npm run dev
 
 # 4. Run automated verification suites
-npm test                   # Complete unit & regression test suite (54/54 tests passed)
+npm test                   # Complete unit & regression test suite (63/63 tests passed across 13 suites)
 npm run test:planner       # 14/14 deterministic budget, scaling & DAG milestone tests
 npm run test:compliance    # 6/6 automated SAST, Zero-PII, ARIA & schema contract scans
 
