@@ -248,66 +248,25 @@ select.utsav-input,
   outline-offset: 2px;
 }
 
-/* Solid-Hex Flashing Crimson Red Critical Highlights (Zero rgba, Zero blur) */
-@keyframes criticalBorderFlash {
-  0%, 100% {
-    border-color: #DC2626 !important;
-    background-color: #FEF2F2 !important;
-    box-shadow: 0 0 0 2px #DC2626;
-  }
-  50% {
-    border-color: #991B1B !important;
-    background-color: #FEE2E2 !important;
-    box-shadow: 0 0 0 4px #F87171;
-  }
-}
-
-@keyframes criticalBtnStrobe {
-  0%, 100% {
-    background-color: #DC2626 !important;
-    color: #FFFFFF !important;
-    border-color: #B91C1C !important;
-    box-shadow: 0 0 0 2px #FECACA;
-  }
-  50% {
-    background-color: #991B1B !important;
-    color: #FEF2F2 !important;
-    border-color: #7F1D1D !important;
-    box-shadow: 0 0 0 4px #F87171;
-  }
-}
-
-@keyframes criticalBeaconPulse {
-  0%, 100% {
-    transform: scale(1);
-    background-color: #DC2626;
-    box-shadow: 0 0 0 2px #FECACA;
-  }
-  50% {
-    transform: scale(1.4);
-    background-color: #991B1B;
-    box-shadow: 0 0 0 4px #DC2626;
-  }
-}
-
+/* Solid-Hex High-Contrast Critical Highlights (Zero rgba, Zero blur, Zero Strobing) */
 .critical-flash-card {
   border: 2px solid #DC2626 !important;
   background-color: #FEF2F2 !important;
-  animation: criticalBorderFlash 1.4s infinite ease-in-out;
 }
 
 .critical-strobe-btn {
-  animation: criticalBtnStrobe 1.2s infinite ease-in-out;
+  background-color: #DC2626 !important;
+  color: #FFFFFF !important;
+  border-color: #B91C1C !important;
   cursor: pointer;
 }
 
 .critical-pulse-dot {
   display: inline-block;
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 9999px;
   background-color: #DC2626;
-  animation: criticalBeaconPulse 1.2s infinite ease-in-out;
 }
 
 @media (prefers-reduced-motion: reduce) {

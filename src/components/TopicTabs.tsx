@@ -58,7 +58,7 @@ export const TopicTabs: React.FC<TopicTabsProps> = ({
   };
 
   const tips: Record<string, string> = {
-    overview: "Step 1: Visual Dependency Flowchart maps prerequisite sequences. Blocked items pulse in crimson red.",
+    overview: "Step 1: Visual Dependency Flowchart maps prerequisite sequences. High-contrast solid borders highlight blocked items with 1-click resolution.",
     budget: "Step 2: Variable catering scales with guest headcount; fixed costs remain locked. 1-click trade-offs resolve deficits.",
     vendor: "Step 3: Paste plain-text WhatsApp quotes to audit hidden costs (18% GST, generator fuel) and dispatch prompts.",
     activity: "Step 4: Immutable audit trail records every status transition, simulation, and closed communication loop."

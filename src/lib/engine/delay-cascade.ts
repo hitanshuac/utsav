@@ -133,9 +133,9 @@ export function buildWhatsAppReminderUrl(
 
   const message =
     `Namaste ${vendorName || "Ji"},\n\n` +
-    `Regarding the Sharma Family Celebration: ${urgencyPrefix}.\n` +
+    `Regarding the scheduled event celebration: ${urgencyPrefix}.\n` +
     `Item: "${milestoneTitle}"${timeContext}.\n\n` +
-    `Please ensure your team is on standby and coordinates with the family coordinator immediately. Dhanyawad!`;
+    `Please ensure your team is on standby and coordinates with the event coordinator immediately. Dhanyawad!`;
 
   return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
 }

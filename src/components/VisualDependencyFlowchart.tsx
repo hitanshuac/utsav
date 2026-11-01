@@ -84,10 +84,11 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
   const [customSubject, setCustomSubject] = useState<string>("");
   const [dispatchFeedback, setDispatchFeedback] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"flowchart" | "table">("flowchart");
+  const [focusedStageNumber, setFocusedStageNumber] = useState<number | null>(null);
 
   const flowContainerRef = useRef<HTMLDivElement>(null);
+  const innerContainerRef = useRef<HTMLDivElement>(null);
   const [connections, setConnections] = useState<SvgConnectionLine[]>([]);
-  const [svgDimensions, setSvgDimensions] = useState<{ width: number; height: number }>({ width: 1000, height: 500 });
 
   // Map of tasks for O(1) lookup
   const taskMap = useMemo(() => {
@@ -159,40 +160,33 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
       {
         stageNumber: 4,
         title: "STAGE 4: EXECUTION",
-        subtitle: "Auspicious Handover",
+        subtitle: "Final Handover & Event Kickoff",
         tasks: s3
       }
     ];
   }, [milestones, taskMap]);
 
-  // Compute SVG physical node-to-node bezier connector coordinates
+  // Compute SVG physical node-to-node bezier connector coordinates relative to innerContainerRef
   const recalculateConnections = useCallback(() => {
-    const container = flowContainerRef.current;
-    if (!container) return;
+    const inner = innerContainerRef.current;
+    if (!inner) return;
 
-    const cRect = container.getBoundingClientRect();
-    const scrollLeft = container.scrollLeft;
-    const scrollTop = container.scrollTop;
-    const scrollW = Math.max(container.scrollWidth, container.clientWidth, 980);
-    const scrollH = Math.max(container.scrollHeight, container.clientHeight, 440);
-
-    setSvgDimensions({ width: scrollW, height: scrollH });
-
+    const iRect = inner.getBoundingClientRect();
     const lines: SvgConnectionLine[] = [];
 
     milestones.forEach((task) => {
       task.dependsOn.forEach((prereqId) => {
-        const fromPort = container.querySelector(`[data-port-out="${prereqId}"]`);
-        const toPort = container.querySelector(`[data-port-in="${task.id}"]`);
+        const fromPort = inner.querySelector(`[data-port-out="${prereqId}"]`);
+        const toPort = inner.querySelector(`[data-port-in="${task.id}"]`);
 
         if (fromPort && toPort) {
           const fRect = fromPort.getBoundingClientRect();
           const tRect = toPort.getBoundingClientRect();
 
-          const x1 = fRect.left + fRect.width / 2 - cRect.left + scrollLeft;
-          const y1 = fRect.top + fRect.height / 2 - cRect.top + scrollTop;
-          const x2 = tRect.left + tRect.width / 2 - cRect.left + scrollLeft;
-          const y2 = tRect.top + tRect.height / 2 - cRect.top + scrollTop;
+          const x1 = fRect.left + fRect.width / 2 - iRect.left;
+          const y1 = fRect.top + fRect.height / 2 - iRect.top;
+          const x2 = tRect.left + tRect.width / 2 - iRect.left;
+          const y2 = tRect.top + tRect.height / 2 - iRect.top;
 
           const prereqTask = taskMap.get(prereqId);
           const isCompleted = prereqTask?.status === "completed";
@@ -222,29 +216,27 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
     setConnections(lines);
   }, [milestones, bottlenecks, selectedTaskId, hoveredTaskId, taskMap]);
 
-  // Recalculate on mount, selection, resize, and scroll
+  // Recalculate on mount, selection, resize
   useEffect(() => {
     recalculateConnections();
     const animId = requestAnimationFrame(recalculateConnections);
     const timer = setTimeout(recalculateConnections, 80);
 
-    const container = flowContainerRef.current;
-    if (!container) return () => { cancelAnimationFrame(animId); clearTimeout(timer); };
+    const inner = innerContainerRef.current;
+    if (!inner) return () => { cancelAnimationFrame(animId); clearTimeout(timer); };
 
     const resizeObserver = new ResizeObserver(() => {
       recalculateConnections();
     });
-    resizeObserver.observe(container);
+    resizeObserver.observe(inner);
 
     window.addEventListener("resize", recalculateConnections);
-    container.addEventListener("scroll", recalculateConnections);
 
     return () => {
       cancelAnimationFrame(animId);
       clearTimeout(timer);
       resizeObserver.disconnect();
       window.removeEventListener("resize", recalculateConnections);
-      container.removeEventListener("scroll", recalculateConnections);
     };
   }, [recalculateConnections, viewMode]);
 
@@ -304,7 +296,7 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
       channel: "system",
       vendorName: selectedTask?.vendorContact?.name || "Deterministic Engine",
       recipient: "Operations Bridge",
-      summary: `Simulated +${minutes}m delay on ${selectedTaskId.toUpperCase()}: ${impact.downstreamAffectedTasks.length} downstream tasks affected. ${impact.criticalMuhuratAtRisk ? "CRITICAL MUHURAT AT RISK." : "Buffer absorbed delay."}`,
+      summary: `Simulated +${minutes}m delay on ${selectedTaskId.toUpperCase()}: ${impact.downstreamAffectedTasks.length} downstream tasks affected. ${impact.criticalMuhuratAtRisk ? "CRITICAL SCHEDULE AT RISK." : "Buffer absorbed delay."}`,
       loopStatus: "closed"
     });
 
@@ -326,9 +318,9 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
             diff: `${impact.downstreamAffectedTasks.length} tasks`
           },
           {
-            label: "Muhurat Schedule",
+            label: "Event Schedule",
             before: "On-Track",
-            after: impact.criticalMuhuratAtRisk ? "AT RISK (Dinner delayed)" : "Safe (Buffer Absorbed)",
+            after: impact.criticalMuhuratAtRisk ? "AT RISK (Schedule Delayed)" : "Safe (Buffer Absorbed)",
             diff: impact.criticalMuhuratAtRisk ? "Delayed" : "Safe"
           }
         ]
@@ -473,8 +465,8 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
           <span className="text-slate-700 font-semibold">Completed Prerequisite (Solid Green)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-red-600 critical-pulse-dot inline-block" />
-          <span className="text-red-700 font-semibold">Blocked / Bottleneck (Dashed Red)</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-rose-600 inline-block" />
+          <span className="text-rose-800 font-semibold">Blocked / Bottleneck (Dashed Red)</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 inline-block" />
@@ -486,21 +478,32 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
         </div>
       </div>
 
-      {/* OVERARCHING STAGE PROGRESSION TRACK (VISUAL CONNECTIVITY PIPELINE) */}
-      <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 mb-4 overflow-x-auto">
-        <div className="flex items-center justify-between min-w-[620px] gap-2">
+      {/* OVERARCHING STAGE PROGRESSION TRACK (CLICK TO FOCUS ZONE) */}
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-2 mb-3 overflow-x-auto">
+        <div className="flex items-center justify-between min-w-[640px] gap-2">
           {stages.map((stage, idx) => {
             const allCompleted = stage.tasks.length > 0 && stage.tasks.every((t) => t.status === "completed");
             const hasBlocked = stage.tasks.some((t) => bottlenecks.includes(t.id));
+            const isFocused = focusedStageNumber === stage.stageNumber;
             return (
               <React.Fragment key={stage.stageNumber}>
-                <div className="flex items-center gap-2 flex-1 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setFocusedStageNumber(isFocused ? null : stage.stageNumber)}
+                  className={`flex items-center gap-2 flex-1 min-w-0 p-1.5 rounded-lg text-left transition-all cursor-pointer ${
+                    isFocused
+                      ? "bg-indigo-100 border border-indigo-300 ring-2 ring-indigo-400/30"
+                      : "hover:bg-slate-100"
+                  }`}
+                  aria-pressed={isFocused}
+                  title={`Click to focus on ${stage.title}`}
+                >
                   <span
                     className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
                       allCompleted
                         ? "bg-emerald-600 text-white"
                         : hasBlocked
-                        ? "bg-red-600 text-white critical-pulse-dot"
+                        ? "bg-rose-600 text-white"
                         : "bg-indigo-600 text-white"
                     }`}
                   >
@@ -514,7 +517,7 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                       {stage.tasks.length} task(s) · {stage.subtitle}
                     </span>
                   </div>
-                </div>
+                </button>
                 {idx < stages.length - 1 && (
                   <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 mx-1" aria-hidden="true" />
                 )}
@@ -523,6 +526,81 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
           })}
         </div>
       </div>
+
+      {/* STAGE ZONE FOCUS QUICK-ACTION BANNER (INTERACTIVE ZONE EXPANSION) */}
+      {focusedStageNumber !== null && (() => {
+        const fStage = stages.find((s) => s.stageNumber === focusedStageNumber);
+        if (!fStage) return null;
+        const stageTasks = fStage.tasks;
+        const completedCount = stageTasks.filter((t) => t.status === "completed").length;
+        const blockedTasks = stageTasks.filter((t) => {
+          return t.status !== "completed" && t.dependsOn.some((pId) => taskMap.get(pId)?.status !== "completed");
+        });
+        const uncompletedPrereqIds = Array.from(
+          new Set(
+            stageTasks.flatMap((t) =>
+              t.dependsOn.filter((pId) => taskMap.get(pId)?.status !== "completed")
+            )
+          )
+        );
+
+        return (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 mb-4 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-indigo-950 uppercase tracking-wide">
+                    {fStage.title} · Focused Zone
+                  </span>
+                  <span className="text-[10px] font-mono font-bold bg-white text-indigo-800 border border-indigo-200 px-2 py-0.5 rounded">
+                    {completedCount}/{stageTasks.length} Completed
+                  </span>
+                  {blockedTasks.length > 0 && (
+                    <span className="text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 px-2 py-0.5 rounded">
+                      {blockedTasks.length} Blocked Task(s)
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-indigo-900 mt-0.5">
+                  {fStage.subtitle} · {blockedTasks.length > 0 ? `Waiting on prerequisite tasks: ${uncompletedPrereqIds.map((p) => p.toUpperCase()).join(", ")}.` : "All milestones in this stage are clear and on schedule."}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {uncompletedPrereqIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      uncompletedPrereqIds.forEach((pId) => {
+                        if (onUpdateTaskStatus) onUpdateTaskStatus(pId, "completed");
+                        else onCycleTaskStatus(pId);
+                      });
+                    }}
+                    className="utsav-btn bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 font-bold shadow-xs cursor-pointer flex items-center gap-1"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>⚡ Resolve {uncompletedPrereqIds.length} Blocker(s)</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setViewMode("table")}
+                  className="utsav-btn bg-white hover:bg-slate-100 border border-indigo-300 text-indigo-900 text-xs px-2.5 py-1.5 font-semibold cursor-pointer shadow-xs"
+                >
+                  📋 Open Table View
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFocusedStageNumber(null)}
+                  className="text-xs font-bold text-slate-500 hover:text-slate-800 px-2 py-1 cursor-pointer"
+                >
+                  [Clear Focus]
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* VIEW 1: INTERACTIVE VISUAL FLOWCHART WITH DYNAMIC SVG BEZIER CONNECTIONS */}
       {viewMode === "flowchart" && (
@@ -533,15 +611,11 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
             className="bg-slate-50 border border-slate-200 rounded-xl p-4 overflow-x-auto relative shadow-xs"
             style={{ minHeight: "440px" }}
           >
-            <div className="min-w-[980px] grid grid-cols-4 gap-6 relative">
+            <div ref={innerContainerRef} className="relative min-w-[840px] w-full">
               {/* Dynamic SVG Connection Overlay */}
               <svg
-                className="absolute top-0 left-0 pointer-events-none"
-                style={{
-                  width: svgDimensions.width,
-                  height: svgDimensions.height,
-                  zIndex: 1
-                }}
+                className="absolute inset-0 w-full h-full pointer-events-none"
+                style={{ zIndex: 1 }}
                 aria-hidden="true"
               >
                 <defs>
@@ -667,113 +741,124 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                   })}
               </svg>
 
-              {/* 4 Stage Columns */}
-              {stages.map((stage) => (
-                <div
-                  key={stage.stageNumber}
-                  className="flex flex-col gap-3 min-w-[220px] relative z-10"
-                >
-                  {/* Stage Header */}
-                  <div className="bg-white border border-slate-200 rounded-lg p-2.5 shadow-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-extrabold uppercase text-slate-800 tracking-wider">
-                        {stage.title}
-                      </span>
-                      <span className="text-[10px] font-mono font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
-                        {stage.tasks.length} task(s)
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-slate-500 block mt-0.5">{stage.subtitle}</span>
-                  </div>
-
-                  {/* Nodes in this Stage */}
-                  <div className="flex flex-col gap-3 flex-1">
-                    {stage.tasks.length === 0 ? (
-                      <div className="text-[11px] text-slate-400 py-6 text-center italic bg-white border border-dashed border-slate-200 rounded-xl">
-                        No milestones in this stage
+              {/* 4 Stage Columns Grid with Stage Focus Support */}
+              <div className="grid grid-cols-4 gap-4 relative z-10">
+                {stages.map((stage) => {
+                  const isStageFocused = focusedStageNumber === stage.stageNumber;
+                  return (
+                    <div
+                      key={stage.stageNumber}
+                      className={`flex flex-col gap-3 min-w-[210px] relative transition-opacity ${
+                        focusedStageNumber !== null && !isStageFocused ? "opacity-60 hover:opacity-100" : ""
+                      }`}
+                    >
+                      {/* Stage Header */}
+                      <div
+                        className={`border rounded-lg p-2.5 shadow-xs transition-colors ${
+                          isStageFocused
+                            ? "bg-indigo-50/70 border-indigo-300 ring-2 ring-indigo-200"
+                            : "bg-white border-slate-200"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-extrabold uppercase text-slate-800 tracking-wider">
+                            {stage.title}
+                          </span>
+                          <span className="text-[10px] font-mono font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                            {stage.tasks.length} task(s)
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-500 block mt-0.5">{stage.subtitle}</span>
                       </div>
-                    ) : (
-                      stage.tasks.map((task) => {
-                        const isSelected = selectedTaskId === task.id;
-                        const isHovered = hoveredTaskId === task.id;
-                        const isBottleneck = bottlenecks.includes(task.id);
-                        const hasUncompletedPrereq = task.dependsOn.some((pId) => {
-                          const parent = taskMap.get(pId);
-                          return parent && parent.status !== "completed";
-                        });
-                        const allPrereqsDone =
-                          task.dependsOn.length > 0 &&
-                          task.dependsOn.every((pId) => taskMap.get(pId)?.status === "completed");
 
-                        const isCriticalPathAlert =
-                          isBottleneck ||
-                          hasUncompletedPrereq ||
-                          (task.urgency === "critical" && task.status !== "completed") ||
-                          ((task.leadTimeDays ?? task.deadlineDaysBeforeEvent) > daysRemaining && task.status !== "completed");
+                      {/* Nodes in this Stage */}
+                      <div className="flex flex-col gap-3 flex-1">
+                        {stage.tasks.length === 0 ? (
+                          <div className="text-[11px] text-slate-400 py-6 text-center italic bg-white border border-dashed border-slate-200 rounded-xl">
+                            No milestones in this stage
+                          </div>
+                        ) : (
+                          stage.tasks.map((task) => {
+                            const isSelected = selectedTaskId === task.id;
+                            const isHovered = hoveredTaskId === task.id;
+                            const isBottleneck = bottlenecks.includes(task.id);
+                            const hasUncompletedPrereq = task.dependsOn.some((pId) => {
+                              const parent = taskMap.get(pId);
+                              return parent && parent.status !== "completed";
+                            });
+                            const allPrereqsDone =
+                              task.dependsOn.length > 0 &&
+                              task.dependsOn.every((pId) => taskMap.get(pId)?.status === "completed");
 
-                        const downstream = getDownstreamTasks(task.id);
+                            const isCriticalPathAlert =
+                              isBottleneck ||
+                              hasUncompletedPrereq ||
+                              (task.urgency === "critical" && task.status !== "completed") ||
+                              ((task.leadTimeDays ?? task.deadlineDaysBeforeEvent) > daysRemaining && task.status !== "completed");
 
-                        return (
-                          <div
-                            key={task.id}
-                            data-task-id={task.id}
-                            onClick={() => handleSelectNode(task.id)}
-                            onMouseEnter={() => setHoveredTaskId(task.id)}
-                            onMouseLeave={() => setHoveredTaskId(null)}
-                            role="button"
-                            tabIndex={0}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") handleSelectNode(task.id);
-                            }}
-                            className={`relative z-10 cursor-pointer rounded-xl p-3 border transition-all text-left shadow-xs ${
-                              isCriticalPathAlert
-                                ? `critical-flash-card ${isSelected ? "ring-2 ring-red-600" : ""}`
-                                : isSelected
-                                ? "border-indigo-600 bg-white ring-2 ring-indigo-600 shadow-md"
-                                : isHovered
-                                ? "border-indigo-400 bg-white shadow-xs"
-                                : "bg-white border-slate-200 hover:border-slate-300"
-                            }`}
-                          >
-                            {/* Input Port Anchor Dot (Left Terminal) */}
-                            {task.dependsOn.length > 0 && (
-                              <span
-                                data-port-in={task.id}
-                                className={`absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-white shadow-xs z-20 ${
-                                  hasUncompletedPrereq || isBottleneck
-                                    ? "bg-red-600 critical-pulse-dot"
-                                    : allPrereqsDone
-                                    ? "bg-emerald-600"
-                                    : "bg-slate-400"
+                            const downstream = getDownstreamTasks(task.id);
+
+                            return (
+                              <div
+                                key={task.id}
+                                data-task-id={task.id}
+                                onClick={() => handleSelectNode(task.id)}
+                                onMouseEnter={() => setHoveredTaskId(task.id)}
+                                onMouseLeave={() => setHoveredTaskId(null)}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") handleSelectNode(task.id);
+                                }}
+                                className={`relative z-10 cursor-pointer rounded-xl p-3 border transition-all text-left shadow-xs ${
+                                  isSelected
+                                    ? "border-2 border-indigo-600 bg-white ring-2 ring-indigo-500/20 shadow-md"
+                                    : isCriticalPathAlert
+                                    ? "border-2 border-rose-400 bg-rose-50/50 hover:border-rose-500 shadow-xs"
+                                    : isHovered
+                                    ? "border-indigo-400 bg-white shadow-xs"
+                                    : "bg-white border-slate-200 hover:border-slate-300"
                                 }`}
-                                title={`Prerequisite input terminal (Requires: ${task.dependsOn.join(", ")})`}
-                              />
-                            )}
-
-                            {/* Output Port Anchor Dot (Right Terminal) */}
-                            {downstream.length > 0 && (
-                              <span
-                                data-port-out={task.id}
-                                className={`absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-white shadow-xs z-20 ${
-                                  task.status === "completed"
-                                    ? "bg-emerald-600"
-                                    : isSelected
-                                    ? "bg-indigo-600"
-                                    : "bg-indigo-400"
-                                }`}
-                                title={`Downstream output terminal (Unlocks: ${downstream.map((d) => d.id).join(", ")})`}
-                              />
-                            )}
-
-                            {/* Node Title & Badges */}
-                            <div className="flex items-start justify-between gap-1 mb-1.5">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                {isCriticalPathAlert && (
-                                  <span className="critical-pulse-dot shrink-0" aria-hidden="true" />
+                              >
+                                {/* Input Port Anchor Dot (Left Terminal) */}
+                                {task.dependsOn.length > 0 && (
+                                  <span
+                                    data-port-in={task.id}
+                                    className={`absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-white shadow-xs z-20 ${
+                                      hasUncompletedPrereq || isBottleneck
+                                        ? "bg-rose-600"
+                                        : allPrereqsDone
+                                        ? "bg-emerald-600"
+                                        : "bg-slate-400"
+                                    }`}
+                                    title={`Prerequisite input terminal (Requires: ${task.dependsOn.join(", ")})`}
+                                  />
                                 )}
-                                <span className="text-[10px] font-mono font-bold text-slate-500">
-                                  {task.id.toUpperCase()}
-                                </span>
+
+                                {/* Output Port Anchor Dot (Right Terminal) */}
+                                {downstream.length > 0 && (
+                                  <span
+                                    data-port-out={task.id}
+                                    className={`absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-white shadow-xs z-20 ${
+                                      task.status === "completed"
+                                        ? "bg-emerald-600"
+                                        : isSelected
+                                        ? "bg-indigo-600"
+                                        : "bg-indigo-400"
+                                    }`}
+                                    title={`Downstream output terminal (Unlocks: ${downstream.map((d) => d.id).join(", ")})`}
+                                  />
+                                )}
+
+                                {/* Node Title & Badges */}
+                                <div className="flex items-start justify-between gap-1 mb-1.5">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    {isCriticalPathAlert && (
+                                      <span className="w-2 h-2 rounded-full bg-rose-600 inline-block shrink-0" aria-hidden="true" />
+                                    )}
+                                    <span className="text-[10px] font-mono font-bold text-slate-500">
+                                      {task.id.toUpperCase()}
+                                    </span>
                                 <span className="text-[9px] uppercase px-1.5 py-0.2 rounded font-semibold bg-slate-100 text-slate-600">
                                   {task.category}
                                 </span>
@@ -877,9 +962,11 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
+        </div>
+      </div>
 
           {/* INTERACTIVE NODE INSPECTION & EXECUTION PANEL */}
           {selectedTask && (
@@ -925,6 +1012,147 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                 </div>
               </div>
 
+              {/* PREREQUISITE & DOWNSTREAM INTERDEPENDENCY HUB (1-CLICK BLOCKER RESOLUTION) */}
+              <div className="bg-white border border-slate-200 rounded-xl p-3.5 mb-4 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5 mb-3">
+                  <div className="flex items-center gap-2">
+                    <GitBranch className="w-4 h-4 text-indigo-600" aria-hidden="true" />
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                      Dependency Sequence &amp; Execution Gate
+                    </h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("table")}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+                  >
+                    <TableIcon className="w-3.5 h-3.5" />
+                    <span>View in Full Milestone Table →</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  {/* Upstream Prerequisites */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                    <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-2">
+                      Upstream Prerequisites:
+                    </span>
+                    {selectedTask.dependsOn.length === 0 ? (
+                      <div className="flex items-center gap-1.5 text-emerald-700 font-medium text-xs">
+                        <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>Root Milestone — No upstream dependencies required.</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {selectedTask.dependsOn.map((pId) => {
+                          const pTask = taskMap.get(pId);
+                          const isDone = pTask?.status === "completed";
+                          return (
+                            <div
+                              key={pId}
+                              className={`p-2.5 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+                                isDone
+                                  ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                                  : "bg-rose-50 border-rose-300 text-rose-950"
+                              }`}
+                            >
+                              <div className="flex items-start gap-2">
+                                {isDone ? (
+                                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                                ) : (
+                                  <Lock className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                                )}
+                                <div>
+                                  <div className="font-bold flex items-center gap-1.5 flex-wrap">
+                                    <span>{pTask?.title || pId}</span>
+                                    <span className="text-[10px] font-mono px-1 rounded bg-white/70 border">
+                                      {pId.toUpperCase()}
+                                    </span>
+                                  </div>
+                                  <span className="text-[11px] text-slate-600 block">
+                                    Status: <strong>{pTask?.status.replace("_", " ") || "unknown"}</strong> · Lead: {pTask?.leadTimeDays || pTask?.deadlineDaysBeforeEvent}d
+                                  </span>
+                                </div>
+                              </div>
+
+                              {!isDone && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (onUpdateTaskStatus) {
+                                      onUpdateTaskStatus(pId, "completed");
+                                    } else {
+                                      onCycleTaskStatus(pId);
+                                    }
+                                  }}
+                                  className="utsav-btn bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-2.5 py-1.5 font-bold shrink-0 shadow-xs cursor-pointer flex items-center gap-1"
+                                >
+                                  <Zap className="w-3 h-3" />
+                                  <span>Resolve Blocker: Complete Prereq</span>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Downstream Unlocked Milestones */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                    <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-2">
+                      Downstream Unlocked Tasks:
+                    </span>
+                    {getDownstreamTasks(selectedTask.id).length === 0 ? (
+                      <span className="text-slate-500 italic text-xs">
+                        Terminal Milestone — Final stage deliverable.
+                      </span>
+                    ) : (
+                      <div className="space-y-2">
+                        {getDownstreamTasks(selectedTask.id).map((downTask) => {
+                          const isDownDone = downTask.status === "completed";
+                          return (
+                            <div
+                              key={downTask.id}
+                              className="p-2 rounded-lg bg-white border border-slate-200 flex items-center justify-between gap-2"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded">
+                                  {downTask.id.toUpperCase()}
+                                </span>
+                                <span className="font-semibold text-slate-800 text-xs">
+                                  {downTask.title}
+                                </span>
+                              </div>
+                              <span
+                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded font-mono ${
+                                  isDownDone
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : "bg-slate-100 text-slate-700"
+                                }`}
+                              >
+                                {downTask.status.replace("_", " ")}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {selectedTask.status !== "completed" && getDownstreamTasks(selectedTask.id).length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleStatusChange("completed")}
+                        className="mt-2.5 w-full utsav-btn bg-indigo-600 hover:bg-indigo-700 text-white text-xs py-1.5 font-bold shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        <span>Complete '{selectedTask.title}' to Unlock Dependent Path</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Sub-Panels: Delay Cascade & Vendor Outreach (Clean Roomy Layout) */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Left: Delay Cascade Simulator */}
@@ -939,7 +1167,7 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                     </div>
 
                     <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
-                      Simulate ceremony delays on this node to forecast downstream impact on Muhurat rituals and dinner schedules.
+                      Simulate schedule delays on this milestone to forecast downstream impact on event proceedings, guest arrivals, and vendor handovers.
                     </p>
 
                     {/* Delay Buttons with Responsive Grid and No Overflow */}
@@ -969,7 +1197,7 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                           </strong>
                           {activeDelayImpact.criticalMuhuratAtRisk && (
                             <span className="text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 px-1.5 py-0.2 rounded uppercase">
-                              Muhurat at Risk
+                              Schedule at Risk
                             </span>
                           )}
                         </div>
@@ -1132,7 +1360,7 @@ export const VisualDependencyFlowchart: React.FC<VisualDependencyFlowchartProps>
                     <td className="py-2.5 px-3">
                       <div className="font-semibold text-slate-900 flex items-center gap-1.5">
                         {isBottleneck && (
-                          <span className="critical-pulse-dot shrink-0" aria-hidden="true" />
+                          <span className="w-2 h-2 rounded-full bg-rose-600 inline-block shrink-0" aria-hidden="true" />
                         )}
                         <span>{task.title}</span>
                       </div>

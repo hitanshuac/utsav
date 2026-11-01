@@ -29,6 +29,21 @@ import { ActivityHistoryPanel } from "./ActivityHistoryPanel";
 import { logActivityEvent } from "../lib/services/event-logger";
 import { SupportedLanguage, TRANSLATIONS } from "../lib/i18n";
 
+export interface ClosedLoopNotice {
+  title: string;
+  message: string;
+  affectedCategories?: {
+    category: string;
+    label: string;
+    delta: number;
+    newAllocated: number;
+    rationale: string;
+    vendorName?: string;
+  }[];
+  actionTab?: TopicTabId;
+  actionLabel?: string;
+}
+
 interface MainPanelProps {
   activeTab: TopicTabId;
   budgetItems: BudgetItem[];
@@ -65,6 +80,8 @@ interface MainPanelProps {
   isRebalancing?: boolean;
   aiNarrative?: string | null;
   aiProvenance?: "ai" | "fallback";
+  closedLoopNotice?: ClosedLoopNotice | null;
+  onDismissClosedLoopNotice?: () => void;
 }
 
 export const MainPanel: FC<MainPanelProps> = ({
@@ -102,7 +119,9 @@ export const MainPanel: FC<MainPanelProps> = ({
   onConsultAiTradeoffs,
   isRebalancing = false,
   aiNarrative,
-  aiProvenance = "fallback"
+  aiProvenance = "fallback",
+  closedLoopNotice,
+  onDismissClosedLoopNotice
 }) => {
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
 
@@ -513,7 +532,7 @@ export const MainPanel: FC<MainPanelProps> = ({
                       </strong>
                     </div>
                     <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
-                      <span className="text-slate-500 text-[11px] block">Muhurat Feast Buffer</span>
+                      <span className="text-slate-500 text-[11px] block">Feast &amp; Catering Buffer</span>
                       <strong className="text-emerald-600 font-bold font-mono text-sm">
                         Protected (Catering on track)
                       </strong>
@@ -621,6 +640,90 @@ export const MainPanel: FC<MainPanelProps> = ({
             <strong>{(guestCount / baseGuestCount).toFixed(2)}x</strong>), while venue and photography remain fixed contract costs.
           </p>
 
+          {/* CLOSED-LOOP HUMAN TRADE-OFF RESOLUTION BANNER */}
+          {closedLoopNotice && (
+            <div className="bg-emerald-50 border-2 border-emerald-500 rounded-xl p-4 mb-5 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-200 pb-3 mb-3">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shrink-0 mt-0.5">
+                    ✓
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-emerald-950 uppercase tracking-wide">
+                      {closedLoopNotice.title}
+                    </h3>
+                    <p className="text-xs text-emerald-900 mt-0.5 leading-relaxed">
+                      {closedLoopNotice.message}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                  {closedLoopNotice.actionTab && onTabChange && (
+                    <button
+                      type="button"
+                      onClick={() => onTabChange(closedLoopNotice.actionTab!)}
+                      className="utsav-btn bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-3 py-1.5 font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>{closedLoopNotice.actionLabel || "Audit Vendor Quotes & Dispatch Addendums →"}</span>
+                    </button>
+                  )}
+                  {onDismissClosedLoopNotice && (
+                    <button
+                      type="button"
+                      onClick={onDismissClosedLoopNotice}
+                      className="text-xs text-emerald-800 hover:text-emerald-950 font-bold px-2 py-1 cursor-pointer"
+                      title="Dismiss notice"
+                    >
+                      [Dismiss]
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {closedLoopNotice.affectedCategories && closedLoopNotice.affectedCategories.length > 0 && (
+                <div>
+                  <span className="text-[10px] font-mono font-bold text-emerald-800 uppercase tracking-wider block mb-2">
+                    Scope Reductions &amp; Contract Addendums Incorporated Into Vendor Ledger Notes:
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {closedLoopNotice.affectedCategories.map((cat, idx) => (
+                      <div
+                        key={idx}
+                        className="bg-white border border-emerald-200 rounded-lg p-2.5 text-xs flex flex-col justify-between"
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <strong className="text-slate-900 font-bold">{cat.label}</strong>
+                          <span className="font-mono font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded text-[11px]">
+                            {cat.delta < 0 ? `-₹${Math.abs(cat.delta).toLocaleString("en-IN")}` : `+₹${cat.delta.toLocaleString("en-IN")}`}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 italic leading-snug">
+                          &quot;{cat.rationale}&quot;
+                        </p>
+                        <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-mono text-slate-500">
+                          <span>New Allocation: ₹{cat.newAllocated.toLocaleString("en-IN")}</span>
+                          {onTabChange && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onSearchChange?.(cat.category);
+                                onTabChange("vendor");
+                              }}
+                              className="text-indigo-600 hover:underline font-bold cursor-pointer"
+                            >
+                              Dispatch Addendum →
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 mb-5">
             {sortedBudget.map((item: BudgetItem) => {
               const scaledCat = scaledCategories.find((s) => s.category === item.category);
@@ -640,7 +743,7 @@ export const MainPanel: FC<MainPanelProps> = ({
                   key={item.id}
                   className={`rounded-xl p-3.5 flex flex-col justify-between transition-colors shadow-xs ${
                     isCardCritical
-                      ? "critical-flash-card"
+                      ? "border-2 border-rose-400 bg-rose-50/40 hover:border-rose-500"
                       : "bg-white border border-slate-200 hover:border-slate-300"
                   }`}
                 >
@@ -648,7 +751,7 @@ export const MainPanel: FC<MainPanelProps> = ({
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         {isCardCritical && (
-                          <span className="critical-pulse-dot shrink-0" aria-hidden="true" />
+                          <span className="w-2 h-2 rounded-full bg-rose-600 inline-block shrink-0" aria-hidden="true" />
                         )}
                         <span className="text-xs font-bold text-slate-900">{item.label}</span>
 
@@ -708,9 +811,28 @@ export const MainPanel: FC<MainPanelProps> = ({
                   </div>
 
                   {item.notes && (
-                    <p className="text-[11px] text-slate-500 mb-2.5 italic">
-                      &quot;{item.notes}&quot;
-                    </p>
+                    <div className="mb-2.5">
+                      <p className="text-[11px] text-slate-600 italic leading-snug">
+                        &quot;{item.notes}&quot;
+                      </p>
+                      {item.notes.includes("[Scope Revised") && onTabChange && (
+                        <div className="mt-1.5 flex items-center justify-between text-[10px] font-mono">
+                          <span className="text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">
+                            📝 Scope Revised
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onSearchChange?.(item.category);
+                              onTabChange("vendor");
+                            }}
+                            className="text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer"
+                          >
+                            Draft Vendor Addendum →
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
@@ -1091,10 +1213,10 @@ export const MainPanel: FC<MainPanelProps> = ({
               </span>
             </div>
 
-            {/* Flagged Hidden Costs with Critical Pulsing Highlight */}
+            {/* Flagged Hidden Costs with High-Contrast Solid Indicator */}
             <div className="mb-3">
               <div className="flex items-center gap-1.5 text-xs font-bold text-rose-900 mb-1.5">
-                <span className="critical-pulse-dot" aria-hidden="true" />
+                <span className="w-2 h-2 rounded-full bg-rose-600 inline-block shrink-0" aria-hidden="true" />
                 <AlertCircle className="w-3.5 h-3.5 text-rose-600" aria-hidden="true" />
                 <span>Flagged Potential Hidden Costs:</span>
               </div>
@@ -1102,9 +1224,9 @@ export const MainPanel: FC<MainPanelProps> = ({
                 {vendorAudit.flaggedHiddenCosts.map((cost, cIdx) => (
                   <li
                     key={cIdx}
-                    className="critical-flash-card rounded-lg p-2 text-[11px] leading-snug flex items-start gap-2"
+                    className="border-2 border-rose-300 bg-rose-50 rounded-lg p-2 text-[11px] leading-snug flex items-start gap-2"
                   >
-                    <span className="critical-pulse-dot mt-1 shrink-0" aria-hidden="true" />
+                    <span className="w-2 h-2 rounded-full bg-rose-600 mt-1 shrink-0" aria-hidden="true" />
                     <span>{cost}</span>
                   </li>
                 ))}

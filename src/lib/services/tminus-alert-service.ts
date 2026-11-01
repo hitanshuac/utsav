@@ -113,7 +113,7 @@ export class TMinusAlertService {
         message = `OVERDUE: Task missed target date by ${Math.abs(daysRemaining)} day(s).`;
       } else if (isDelayed) {
         alertLevel = "critical";
-        message = `DELAY WARNING: +${task.delayMinutes ?? 15}m delay reported. Risk of downstream Muhurat cascade.`;
+        message = `DELAY WARNING: +${task.delayMinutes ?? 15}m delay reported. Risk of downstream schedule cascade.`;
       } else if (task.urgency === "critical") {
         alertLevel = "critical";
         message = `CRITICAL T-MINUS: High-priority milestone due in ${daysRemaining} day(s).`;

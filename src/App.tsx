@@ -3,7 +3,7 @@ import { AppBar } from "./components/AppBar";
 import { TopicTabs, TopicTabId } from "./components/TopicTabs";
 import { AlertBanner } from "./components/AlertBanner";
 import { PageHeader } from "./components/PageHeader";
-import { MainPanel } from "./components/MainPanel";
+import { MainPanel, ClosedLoopNotice } from "./components/MainPanel";
 import { SidebarStack } from "./components/SidebarStack";
 import { ActionDiffModal, ActionDiffData, ActionDiffRow } from "./components/ActionDiffModal";
 import { ActivityHistoryPanel } from "./components/ActivityHistoryPanel";
@@ -54,6 +54,7 @@ export default function App() {
   const [isDiffModalOpen, setIsDiffModalOpen] = useState<boolean>(false);
   const [actionDiffData, setActionDiffData] = useState<ActionDiffData | null>(null);
   const [language, setLanguage] = useState<SupportedLanguage>("en");
+  const [closedLoopNotice, setClosedLoopNotice] = useState<ClosedLoopNotice | null>(null);
 
   // Live Gemini AI Status & Inference State
   const [aiStatus, setAiStatus] = useState<{
@@ -427,8 +428,16 @@ export default function App() {
       channel: "system",
       vendorName: "Host / Family Infusion",
       recipient: "Finance Ops",
-      summary: `Allocated additional ₹${topUp.toLocaleString("en-IN")} to authorized budget ceiling (New Cap: ₹${newCap.toLocaleString("en-IN")}). Deficit resolved.`,
+      summary: `Allocated additional ₹${topUp.toLocaleString("en-IN")} to authorized budget ceiling (New Cap: ₹${newCap.toLocaleString("en-IN")}). Deficit resolved with zero vendor scope cuts.`,
       loopStatus: "closed"
+    });
+
+    setClosedLoopNotice({
+      title: "Budget Cap Top-Up Authorized",
+      message: `Authorized +₹${topUp.toLocaleString("en-IN")} additional budget ceiling (New Cap: ₹${newCap.toLocaleString("en-IN")}). Deficit is 100% eliminated with zero cuts to banquet feast menus, floral decor, or guest logistics.`,
+      affectedCategories: [],
+      actionTab: "overview",
+      actionLabel: "View Updated Event Schedule →"
     });
   };
 
@@ -531,17 +540,48 @@ export default function App() {
     });
   };
 
-  // Apply Trade-off Resolution Strategy
+  // Apply Trade-off Resolution Strategy (Closes human vendor communication loop)
   const handleApplyTradeoff = (strategy: TradeoffStrategy) => {
     const beforeEval = evaluation;
     const updated = [...budgetItems];
+    const affectedCategories: ClosedLoopNotice["affectedCategories"] = [];
+
     for (const adj of strategy.adjustments) {
       const itemIdx = updated.findIndex((i) => i.category === adj.category);
       if (itemIdx >= 0) {
+        const item = updated[itemIdx];
+        const oldAmount = item.allocatedAmount;
+        const newAllocated = Math.max(0, oldAmount + adj.delta);
+        const deltaFormatted = adj.delta < 0 ? `-₹${Math.abs(adj.delta).toLocaleString("en-IN")}` : `+₹${adj.delta.toLocaleString("en-IN")}`;
+        const scopeNote = `[Scope Revised ${deltaFormatted} via '${strategy.strategyTitle}']: ${adj.rationale || "Contract scope adjusted to absorb deficit."}`;
+
         updated[itemIdx] = {
-          ...updated[itemIdx],
-          allocatedAmount: Math.max(0, updated[itemIdx].allocatedAmount + adj.delta)
+          ...item,
+          allocatedAmount: newAllocated,
+          actualAmount: Math.max(0, (item.actualAmount || oldAmount) + adj.delta),
+          notes: scopeNote,
+          isEstimate: false
         };
+
+        affectedCategories.push({
+          category: adj.category,
+          label: item.label,
+          delta: adj.delta,
+          newAllocated,
+          rationale: adj.rationale || "Deficit rebalance",
+          vendorName: item.label
+        });
+
+        logActivityEvent({
+          taskId: `vendor-revised-${item.category}`,
+          taskTitle: `Vendor Scope Revised: ${item.label}`,
+          category: item.category,
+          channel: "system",
+          vendorName: `${item.label} Lead`,
+          recipient: "Operations Lead",
+          summary: `Contract scope adjusted by ${deltaFormatted}: "${scopeNote}". Direct vendor negotiation addendum ready.`,
+          loopStatus: "closed"
+        });
       }
     }
 
@@ -565,15 +605,23 @@ export default function App() {
       channel: "system",
       vendorName: "Deterministic Engine",
       recipient: "Coordinator Ops",
-      summary: `Applied '${strategy.strategyTitle}': Saved ₹${Math.abs(beforeEval.variance).toLocaleString("en-IN")}. Deficit eliminated.`,
+      summary: `Applied '${strategy.strategyTitle}': Saved ₹${Math.abs(beforeEval.variance).toLocaleString("en-IN")}. Deficit eliminated. ${affectedCategories.length} vendor contract scopes updated with addendums.`,
       loopStatus: "closed"
+    });
+
+    setClosedLoopNotice({
+      title: `Trade-Off Enacted: ${strategy.strategyTitle}`,
+      message: `Deficit eliminated! ₹${Math.abs(beforeEval.variance).toLocaleString("en-IN")} was absorbed by rebalancing vendor line items. Concrete scope reductions and contract addendums have been written directly to the vendor ledger notes below.`,
+      affectedCategories,
+      actionTab: "vendor",
+      actionLabel: "Audit Vendor Quotes & Dispatch Addendums →"
     });
 
     triggerActionDiff({
       actionName: `Applied Trade-Off: ${strategy.strategyTitle}`,
       title: "Deterministic Rebalance Executed",
       explanation: `The deterministic engine resolved the ₹${Math.abs(beforeEval.variance).toLocaleString("en-IN")} deficit by trimming non-contractual aesthetic items while safeguarding core hospitality.`,
-      recommendedNextStep: "Proceed to Step 3 to review the Milestone Dependency Flowchart.",
+      recommendedNextStep: "Proceed to Step 3 to audit revised vendor quotes or review the Milestone Dependency Flowchart.",
       deltas: [
         {
           label: "Total Allocated",
@@ -789,6 +837,8 @@ export default function App() {
           isRebalancing={isRebalancing}
           aiNarrative={aiNarrative}
           aiProvenance={aiProvenance}
+          closedLoopNotice={closedLoopNotice}
+          onDismissClosedLoopNotice={() => setClosedLoopNotice(null)}
           onActionTriggered={(name, explanation, deltas) => {
             triggerActionDiff({
               actionName: name,

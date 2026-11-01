@@ -90,10 +90,10 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     exportCalendar: "Export .ics Calendar",
     templateExplainer:
       "Pre-loaded standard event scenario. Amounts & milestones are benchmarked. Customize with sliders on the right or create your own custom event.",
-    flowchartTitle: "Muhurat Timeline & Prerequisite Execution Flowchart",
+    flowchartTitle: "Event Timeline & Milestone Dependency Flowchart",
     flowchartSubtitle:
-      "Interactive milestone execution network. Click any node to inspect prerequisite locks, simulate downstream delays, or dispatch vendor communications.",
-    flowchartKahnDag: "Auspicious Sequence & Prerequisite Timeline",
+      "Interactive milestone execution network. Click any task to inspect prerequisite locks, resolve blockers in 1 click, or dispatch vendor communications.",
+    flowchartKahnDag: "Chronological Sequence & Critical Path (Kahn's DAG)",
     flowchartLegendNormal: "Topological Flow",
     flowchartLegendBlocked: "Critical Blocked Path",
     flowchartRequires: "Requires",
@@ -152,10 +152,10 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     exportCalendar: "कैलेंडर .ics डाउनलोड करें",
     templateExplainer:
       "मानक भारतीय आयोजन मॉडल। सभी राशि और कार्य पहले से तय हैं। दाईं ओर दिए स्लाइडर से बदलें या अपना नया इवेंट बनाएं।",
-    flowchartTitle: "मुहूर्त समयरेखा एवं पूर्व-शर्त निष्पादन फ्लोचार्ट",
+    flowchartTitle: "कार्यक्रम समयरेखा एवं चरणबद्ध निर्भरता फ्लोचार्ट",
     flowchartSubtitle:
-      "इंटरैक्टिव माइलस्टोन निष्पादन नेटवर्क। किसी भी कार्य पर क्लिक करके उसकी निर्भरताएं देखें, देरी का असर जांचें या वेंडर को संदेश भेजें।",
-    flowchartKahnDag: "शुभ मुहूर्त अनुक्रम एवं पूर्व-शर्त समयरेखा",
+      "इंटरैक्टिव माइलस्टोन निष्पादन नेटवर्क। किसी भी कार्य पर क्लिक करके उसकी निर्भरताएं देखें, 1-क्लिक में बाधाएं सुलझाएं या वेंडर को संदेश भेजें।",
+    flowchartKahnDag: "कालानुक्रमिक अनुक्रम और महत्वपूर्ण पथ (Kahn's DAG)",
     flowchartLegendNormal: "सामान्य अनुक्रम",
     flowchartLegendBlocked: "अवरुद्ध महत्वपूर्ण पथ",
     flowchartRequires: "आवश्यकता",
@@ -214,10 +214,10 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     exportCalendar: "Calendar .ics Export",
     templateExplainer:
       "Yeh benchmark event template hai jisme amounts aur steps pehle se bhare hain. Right side ke sliders se adjust karo ya naya custom event banao.",
-    flowchartTitle: "Muhurat Timeline & Prerequisite Execution Flowchart",
+    flowchartTitle: "Event Timeline & Milestone Dependency Flowchart",
     flowchartSubtitle:
-      "Interactive milestone execution network. Kisi bhi node pe click karke prerequisites check karo, delay simulate karo ya vendor message dispatch karo.",
-    flowchartKahnDag: "Shubh Muhurat Sequence & Prerequisite Timeline",
+      "Interactive milestone execution network. Kisi bhi node pe click karke prerequisites check karo, 1-click mein blocker resolve karo ya vendor message dispatch karo.",
+    flowchartKahnDag: "Chronological Sequence & Critical Path (Kahn's DAG)",
     flowchartLegendNormal: "Normal Sequence",
     flowchartLegendBlocked: "Blocked Critical Path",
     flowchartRequires: "Zaroori hai",

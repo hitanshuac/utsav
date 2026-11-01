@@ -287,7 +287,7 @@ export const GuidedWalkthroughBar: React.FC<GuidedWalkthroughBarProps> = ({
                   {overrunAmount > 0 ? (
                     <div>
                       <span className="text-rose-700 font-bold flex items-center gap-1.5">
-                        <span className="critical-pulse-dot" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-600 inline-block shrink-0" />
                         <span>
                           Active Overrun Detected: ₹{overrunAmount.toLocaleString("en-IN")} deficit
                         </span>
