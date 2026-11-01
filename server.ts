@@ -3,7 +3,6 @@ import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { createServer as createViteServer } from "vite";
 import { handlePlannerRequest } from "./src/lib/services/planner-route";
 import { SecureLLMClient } from "./src/lib/services/secure-llm-client";
 import {
@@ -136,7 +135,7 @@ export function createApp(): express.Express {
   });
 
   // Health and Diagnostics Endpoint for Judges & Environment Verification
-  app.get("/api/health", (_req, res) => {
+  app.get(["/api/health", "/health", "/api/index/health"], (_req, res) => {
     const llmStatus = SecureLLMClient.getInstance().getStatus();
     res.json({
       status: "ok",
@@ -151,7 +150,7 @@ export function createApp(): express.Express {
   });
 
   // Strategic AI Trade-Off Consultant Endpoint (/api/rebalance)
-  app.post("/api/rebalance", rateLimiter, async (req: Request, res: Response) => {
+  app.post(["/api/rebalance", "/rebalance", "/api/index/rebalance"], rateLimiter, async (req: Request, res: Response) => {
     try {
       const planInput = req.body as EventPlanInput;
 
@@ -291,7 +290,7 @@ Return strictly valid JSON with the format:
   });
 
   // Text-Only Vendor Quote Auditor Endpoint (/api/audit-vendor)
-  app.post("/api/audit-vendor", rateLimiter, async (req: Request, res: Response) => {
+  app.post(["/api/audit-vendor", "/audit-vendor", "/api/index/audit-vendor"], rateLimiter, async (req: Request, res: Response) => {
     try {
       const { vendorNote } = req.body;
       if (!vendorNote || typeof vendorNote !== "string") {
@@ -376,7 +375,7 @@ Return strictly valid JSON:
   });
 
   // Existing Secure LLM Interceptor Endpoint (/api/planner) for backward compatibility
-  app.post("/api/planner", async (req, res) => {
+  app.post(["/api/planner", "/planner", "/api/index/planner"], async (req, res) => {
     try {
       const { status, data } = await handlePlannerRequest(req.body);
       res.status(status).json(data);
@@ -401,6 +400,7 @@ export async function startServer() {
   }
 
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa"
