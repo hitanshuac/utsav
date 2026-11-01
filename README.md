@@ -116,6 +116,7 @@ npm start                  # Production Express server on port 3000
 | [DECISIONS.md](docs/specs/DECISIONS.md) | Architectural Decision Records (ADR-1 through ADR-8) | Architecture |
 | [QA_REPORT.md](docs/specs/QA_REPORT.md) | Resilience matrix (16 scenarios), build gate, compliance scans, GO verdict | Release Gate |
 | [JUDGES_REPRODUCIBILITY_GUIDE.md](JUDGES_REPRODUCIBILITY_GUIDE.md) | Complete step-by-step evaluator instructions | Judge Verification |
+| [SUBMISSION.md](docs/SUBMISSION.md) | Complete Hack2Skill Challenge 5 submission deliverables & answers | Briefing Standards |
 | [HANDOVER.md](HANDOVER.md) | Antigravity IDE 4-persona delivery pipeline & skill integration | Antigravity IDE |
 
 ---
