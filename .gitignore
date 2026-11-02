@@ -9,6 +9,7 @@ build/
 .next/
 out/
 coverage/
+api/*.js
 
 # Environment variables & secrets (CRITICAL: never commit)
 .env

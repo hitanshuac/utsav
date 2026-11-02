@@ -50,16 +50,37 @@ Application state is held in ephemeral in-memory React 19 state with zero persis
 
 ---
 
-## 3. Unified Codebase Architecture (`src/` Single Source of Truth)
+## 3. Modular Single-Responsibility Architecture (The 300-Line Law)
 
-All active source code strictly resides inside `src/` and `server.ts`. Legacy root directories (`lib/`, `components/`, `app/`) have been eliminated:
-- `src/lib/plannerEngine.ts`: Single source of truth for all mathematical and DAG logic.
-- `src/lib/presets.ts`: Evaluator scenario presets.
-- `src/lib/services/secure-llm-client.ts`: Server-side Gemini LLM client with guardrails.
-- `src/lib/services/event-logger.ts`: 100% ephemeral in-memory communication activity logger.
-- `src/lib/services/planner-route.ts`: API route execution handler.
-- `src/types/schemas.ts`: Strict Zod runtime validation schemas.
-- `src/types/planner.ts`: Core TypeScript domain contracts.
+All active source code strictly resides inside `src/`, `server.ts`, and the native TypeScript `api/index.ts`. Every code file is capped at $\le 300$ lines for optimal AST maintainability and static evaluation:
+
+- **Modular Domain Sub-components (`src/components/`):**
+  - `src/components/sections/`: `BudgetSection.tsx`, `OverviewSection.tsx`, `PersonaLensHeader.tsx`, `VendorAuditSection.tsx`.
+  - `src/components/budget/`: `BudgetCardsGrid.tsx`, `BudgetClosedLoopBanner.tsx`, `BudgetFloorEventLogger.tsx`, `BudgetTradeoffsList.tsx`.
+  - `src/components/flowchart/`: `FlowchartSvgLines.tsx`, `FlowchartTaskCard.tsx`, `FlowchartStageColumn.tsx`, `FlowchartTaskDependenciesHub.tsx`, `FlowchartDelaySimulator.tsx`, `FlowchartMessageDispatchForm.tsx`, `FlowchartCommunicationDrawer.tsx`, `FlowchartTableView.tsx`.
+  - `src/components/sidebar/`: `SidebarSimulatorCard.tsx`, `SidebarTriageGaugeCard.tsx`, `SidebarVendorHotlineCard.tsx`, `SidebarActivitySummaryCard.tsx`.
+  - `src/components/activity/`: `ActivityEventItem.tsx`, `VendorMetricsCard.tsx`.
+  - `src/components/custom-event/`: `CustomEventFormFields.tsx`, `customEventOptions.ts`.
+- **Custom React Hooks (`src/hooks/`):**
+  - `useAppController.ts`: Central UI event & state orchestrator.
+  - `usePlanMutations.ts`: Milestone and budget mutation handlers.
+  - `useAiRebalance.ts`: Real-time Gemini 3.5 rebalancing dispatcher.
+  - `usePresetState.ts`: Scenario preset switcher and intake sync.
+  - `useVendorAuditor.ts`: Plain-text vendor quote auditor hook.
+  - `useFlowchartOutreach.ts`: Flowchart WhatsApp & email communication dispatchers.
+  - `useActionDiff.ts`: Real-time impact diff calculation.
+- **Deterministic Engine (`src/lib/engine/` & `src/lib/plannerEngine.ts`):**
+  - `tradeoffs.ts`: Qualitative rebalance heuristics & deficit arithmetic.
+  - `vendor-audit.ts`: Deterministic quote parsing & hidden charge flags.
+  - `dependency-graph.ts`: Kahn's DAG topological sorter & cycle recovery.
+  - `custom-intake.ts`: Scenario generator for custom celebrations.
+- **Server Modularization (`src/server/` & `server.ts`):**
+  - `src/server/middleware.ts`: OWASP ASVS security headers, 16kb payload limiter, 415 media guard.
+  - `src/server/routes.ts`: Validated `/api/health`, `/api/rebalance`, `/api/audit-vendor`, `/api/planner` endpoints.
+  - `api/index.ts`: Clean 2-line native TypeScript re-export for Vercel Serverless (Zero committed `.js` bundles).
+- **Domain Contracts & Validation:**
+  - `src/types/schemas.ts`: Strict Zod runtime validation schemas.
+  - `src/types/planner.ts`: Core TypeScript domain contracts synchronized with JSON Schema.
 
 ---
 

@@ -112,3 +112,81 @@ export function computeScheduledMilestones(
     };
   });
 }
+
+/**
+ * Resolves milestone DAG execution order using Kahn's algorithm and flags bottlenecks.
+ */
+export function resolveMilestoneDAG(
+  milestones: MilestoneTask[],
+  daysRemaining: number
+): {
+  topologicalOrder: string[];
+  bottlenecks: string[];
+  isCyclic: boolean;
+} {
+  const taskMap = new Map<string, MilestoneTask>();
+  const inDegree = new Map<string, number>();
+  const adjList = new Map<string, string[]>();
+
+  for (const task of milestones) {
+    taskMap.set(task.id, task);
+    inDegree.set(task.id, 0);
+    adjList.set(task.id, []);
+  }
+
+  for (const task of milestones) {
+    for (const prereqId of task.dependsOn) {
+      if (taskMap.has(prereqId)) {
+        adjList.get(prereqId)!.push(task.id);
+        inDegree.set(task.id, (inDegree.get(task.id) || 0) + 1);
+      }
+    }
+  }
+
+  const queue: string[] = [];
+  inDegree.forEach((deg, id) => {
+    if (deg === 0) queue.push(id);
+  });
+
+  const sortedOrder: string[] = [];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    sortedOrder.push(current);
+
+    const neighbors = adjList.get(current) || [];
+    for (const neighbor of neighbors) {
+      const newDeg = (inDegree.get(neighbor) || 1) - 1;
+      inDegree.set(neighbor, newDeg);
+      if (newDeg === 0) {
+        queue.push(neighbor);
+      }
+    }
+  }
+
+  const isCyclic = sortedOrder.length !== milestones.length;
+
+  if (isCyclic) {
+    const visited = new Set(sortedOrder);
+    const unvisited = milestones
+      .filter((t) => !visited.has(t.id))
+      .sort((a, b) => b.deadlineDaysBeforeEvent - a.deadlineDaysBeforeEvent);
+    for (const u of unvisited) {
+      sortedOrder.push(u.id);
+    }
+  }
+
+  const bottlenecks: string[] = [];
+  for (const task of milestones) {
+    const leadTime = task.leadTimeDays || task.deadlineDaysBeforeEvent;
+    if ((leadTime > daysRemaining || task.deadlineDaysBeforeEvent > daysRemaining) && task.status !== "completed") {
+      bottlenecks.push(task.id);
+    }
+  }
+
+  return {
+    topologicalOrder: sortedOrder,
+    bottlenecks,
+    isCyclic
+  };
+}
+

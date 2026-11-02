@@ -1,3 +1,6 @@
+/**
+ * Custom Event Guided Intake Modal Dialog component.
+ */
 import React, { useState, useRef, useEffect } from "react";
 import { X, Sparkles } from "lucide-react";
 import {
@@ -10,55 +13,15 @@ import {
   GuestAccessibility
 } from "../lib/plannerEngine";
 import { PriorityVibe } from "../types/planner";
+import { sanitizeTextInput } from "./custom-event/customEventOptions";
+import { CustomEventFormFields } from "./custom-event/CustomEventFormFields";
+
+export { sanitizeTextInput };
 
 interface CustomEventModalProps {
   isOpen: boolean;
   onClose: () => void;
   onApply: (result: CustomEventResult & { eventTitle: string; guestCount: number; budgetCap: number; daysRemaining: number; priorityVibe: PriorityVibe }) => void;
-}
-
-const OCCASION_TYPES: OccasionType[] = [
-  "Wedding",
-  "Milestone Birthday / Anniversary",
-  "Cultural / Community Fest",
-  "Corporate / Retreat"
-];
-
-const VIBE_OPTIONS: PriorityVibe[] = [
-  "Experience First",
-  "Budget Strict",
-  "Balanced"
-];
-
-const MUST_HAVE_OPTIONS: MustHavePriority[] = [
-  "Food & Catering",
-  "Venue & Comfort",
-  "Decor & Ambience",
-  "Photography & Memories"
-];
-
-const DIETARY_OPTIONS: DietaryProfile[] = [
-  "Standard Multi-Cuisine",
-  "Jain (No Onion/Garlic)",
-  "Vegan / Plant-Based",
-  "Traditional Regional"
-];
-
-const ACCESSIBILITY_OPTIONS: GuestAccessibility[] = [
-  "Standard Seating",
-  "Children + Senior Citizen Friendly (Ramps & Rest Zones)",
-  "Full Wheelchair & Assisted Mobility"
-];
-
-/**
- * Strips HTML tags and script payloads from user input strings for XSS prevention.
- */
-export function sanitizeTextInput(raw: string): string {
-  return raw
-    .replace(/<[^>]*>?/gm, "")
-    .replace(/[{}[\]]/g, "")
-    .trim()
-    .slice(0, 200);
 }
 
 export const CustomEventModal: React.FC<CustomEventModalProps> = ({
@@ -100,11 +63,10 @@ export const CustomEventModal: React.FC<CustomEventModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
-    const sanitizedTitle = sanitizeTextInput(eventTitle) || "Custom Event";
-    const clampedBudget = Math.max(10000, Math.min(100000000, budgetCap));
-    const clampedGuests = Math.max(10, Math.min(10000, guestCount));
-    const clampedDays = Math.max(1, Math.min(365, daysUntilEvent));
+    const sanitizedTitle = sanitizeTextInput(eventTitle) || "Custom Celebration";
+    const clampedBudget = Math.max(10000, Math.min(budgetCap, 100000000));
+    const clampedGuests = Math.max(10, Math.min(guestCount, 10000));
+    const clampedDays = Math.max(1, Math.min(daysUntilEvent, 365));
 
     const input: CustomEventInput = {
       eventTitle: sanitizedTitle,
@@ -152,7 +114,7 @@ export const CustomEventModal: React.FC<CustomEventModalProps> = ({
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5 text-slate-500" />
           </button>
@@ -160,169 +122,45 @@ export const CustomEventModal: React.FC<CustomEventModalProps> = ({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="px-6 py-4 flex flex-col gap-4">
-          {/* Event Title */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="custom-event-title" className="text-xs font-semibold text-slate-700">
-              Event Title
-            </label>
-            <input
-              ref={firstFocusRef}
-              id="custom-event-title"
-              type="text"
-              value={eventTitle}
-              onChange={(e) => setEventTitle(e.target.value)}
-              required
-              maxLength={200}
-              className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
-              placeholder="e.g., Sharma Family Wedding"
-            />
-          </div>
+          <CustomEventFormFields
+            firstFocusRef={firstFocusRef}
+            eventTitle={eventTitle}
+            setEventTitle={setEventTitle}
+            occasionType={occasionType}
+            setOccasionType={setOccasionType}
+            budgetCap={budgetCap}
+            setBudgetCap={setBudgetCap}
+            guestCount={guestCount}
+            setGuestCount={setGuestCount}
+            daysUntilEvent={daysUntilEvent}
+            setDaysUntilEvent={setDaysUntilEvent}
+            priorityVibe={priorityVibe}
+            setPriorityVibe={setPriorityVibe}
+            mustHave={mustHave}
+            setMustHave={setMustHave}
+            dietaryProfile={dietaryProfile}
+            setDietaryProfile={setDietaryProfile}
+            guestAccessibility={guestAccessibility}
+            setGuestAccessibility={setGuestAccessibility}
+          />
 
-          {/* Occasion Type */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="custom-occasion-type" className="text-xs font-semibold text-slate-700">
-              Occasion Type
-            </label>
-            <select
-              id="custom-occasion-type"
-              value={occasionType}
-              onChange={(e) => setOccasionType(e.target.value as OccasionType)}
-              className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
+          {/* Actions */}
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer"
             >
-              {OCCASION_TYPES.map((type) => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Budget Cap */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="custom-budget-cap" className="text-xs font-semibold text-slate-700">
-              Total Budget Cap (₹)
-            </label>
-            <input
-              id="custom-budget-cap"
-              type="number"
-              value={budgetCap}
-              onChange={(e) => setBudgetCap(Number(e.target.value))}
-              min={10000}
-              max={100000000}
-              required
-              className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-slate-400"
-            />
-          </div>
-
-          {/* Guest Count */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="custom-guest-count" className="text-xs font-semibold text-slate-700">
-              Expected Guest Count
-            </label>
-            <input
-              id="custom-guest-count"
-              type="number"
-              value={guestCount}
-              onChange={(e) => setGuestCount(Number(e.target.value))}
-              min={10}
-              max={10000}
-              required
-              className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-slate-400"
-            />
-          </div>
-
-          {/* Days Until Event */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="custom-days-until" className="text-xs font-semibold text-slate-700">
-              Days Until Event
-            </label>
-            <input
-              id="custom-days-until"
-              type="number"
-              value={daysUntilEvent}
-              onChange={(e) => setDaysUntilEvent(Number(e.target.value))}
-              min={1}
-              max={365}
-              required
-              className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-slate-400"
-            />
-          </div>
-
-          {/* Priority Vibe */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="custom-priority-vibe" className="text-xs font-semibold text-slate-700">
-              Priority Vibe
-            </label>
-            <select
-              id="custom-priority-vibe"
-              value={priorityVibe}
-              onChange={(e) => setPriorityVibe(e.target.value as PriorityVibe)}
-              className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-sm transition-colors cursor-pointer flex items-center gap-1.5"
             >
-              {VIBE_OPTIONS.map((v) => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
+              <Sparkles className="w-4 h-4 text-amber-400" aria-hidden="true" />
+              <span>Generate Custom Plan</span>
+            </button>
           </div>
-
-          {/* Must-Have Priority */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="custom-must-have" className="text-xs font-semibold text-slate-700">
-              Must-Have Priority (+10% Boost)
-            </label>
-            <select
-              id="custom-must-have"
-              value={mustHave}
-              onChange={(e) => setMustHave(e.target.value as MustHavePriority)}
-              className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
-            >
-              {MUST_HAVE_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Cultural Dietary Profile */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="custom-dietary-profile" className="text-xs font-semibold text-slate-700">
-              Cultural & Dietary Profile (Briefing 24:18)
-            </label>
-            <select
-              id="custom-dietary-profile"
-              value={dietaryProfile}
-              onChange={(e) => setDietaryProfile(e.target.value as DietaryProfile)}
-              className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
-            >
-              {DIETARY_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Guest Age-Group Accessibility */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="custom-accessibility" className="text-xs font-semibold text-slate-700">
-              Multi-Generational & Accessibility Intake (Briefing 25:15)
-            </label>
-            <select
-              id="custom-accessibility"
-              value={guestAccessibility}
-              onChange={(e) => setGuestAccessibility(e.target.value as GuestAccessibility)}
-              className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
-            >
-              {ACCESSIBILITY_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Submit */}
-          <button
-            type="submit"
-            id="custom-event-submit"
-            className="mt-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
-          >
-            <Sparkles className="w-4 h-4" aria-hidden="true" />
-            Generate Custom Plan
-          </button>
         </form>
       </div>
     </div>
